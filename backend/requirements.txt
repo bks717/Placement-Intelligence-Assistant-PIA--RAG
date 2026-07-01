@@ -1,0 +1,35 @@
+# Core
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+python-dotenv==1.1.0
+pydantic==2.11.3
+pydantic-settings==2.9.1
+python-multipart==0.0.20
+
+# LangChain + LLM
+langchain==0.3.25
+langchain-google-genai==2.1.5
+langchain-community==0.3.24
+langchain-text-splitters==0.3.8
+
+# Vector Store
+chromadb==1.0.7
+
+# Embeddings & Reranking
+sentence-transformers==4.1.0
+
+# BM25
+rank-bm25==0.2.2
+
+# PDF Processing
+pymupdf==1.25.5
+
+# MongoDB (optional - falls back to JSON store)
+pymongo==4.12.1
+
+# Evaluation
+ragas==0.2.16
+datasets==3.6.0
+
+# Utilities
+loguru==0.7.3
