@@ -1,43 +1,43 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&display=swap');
 
 :root {
   /* Color System */
-  --bg-primary: #0a0e1a;
-  --bg-secondary: #0f1629;
-  --bg-card: rgba(15, 22, 41, 0.8);
-  --bg-card-hover: rgba(20, 28, 52, 0.9);
-  --bg-glass: rgba(255, 255, 255, 0.03);
-  --bg-glass-hover: rgba(255, 255, 255, 0.06);
+  --bg-primary: #faf8f5;
+  --bg-secondary: #f3efe6;
+  --bg-card: #ffffff;
+  --bg-card-hover: #fbfaf7;
+  --bg-glass: rgba(243, 239, 230, 0.5);
+  --bg-glass-hover: rgba(243, 239, 230, 0.8);
 
-  --text-primary: #e8ecf4;
-  --text-secondary: #8892a8;
-  --text-muted: #5a6478;
+  --text-primary: #3c3830;
+  --text-secondary: #726c5f;
+  --text-muted: #a39c8e;
 
-  --accent-blue: #3b82f6;
-  --accent-blue-light: #60a5fa;
-  --accent-blue-dim: rgba(59, 130, 246, 0.15);
-  --accent-emerald: #10b981;
-  --accent-emerald-dim: rgba(16, 185, 129, 0.15);
-  --accent-purple: #8b5cf6;
-  --accent-purple-dim: rgba(139, 92, 246, 0.15);
-  --accent-amber: #f59e0b;
-  --accent-amber-dim: rgba(245, 158, 11, 0.15);
-  --accent-rose: #f43f5e;
-  --accent-rose-dim: rgba(244, 63, 94, 0.15);
+  --accent-blue: #af563b;
+  --accent-blue-light: #c96f54;
+  --accent-blue-dim: rgba(175, 86, 59, 0.1);
+  --accent-emerald: #607d64;
+  --accent-emerald-dim: rgba(96, 125, 100, 0.1);
+  --accent-purple: #a88c52;
+  --accent-purple-dim: rgba(168, 140, 82, 0.1);
+  --accent-amber: #c18c42;
+  --accent-amber-dim: rgba(193, 140, 66, 0.1);
+  --accent-rose: #b84c58;
+  --accent-rose-dim: rgba(184, 76, 88, 0.1);
 
-  --border-color: rgba(255, 255, 255, 0.06);
-  --border-hover: rgba(255, 255, 255, 0.12);
+  --border-color: rgba(114, 108, 95, 0.15);
+  --border-hover: rgba(114, 108, 95, 0.3);
 
-  --gradient-blue: linear-gradient(135deg, #3b82f6, #2563eb);
-  --gradient-emerald: linear-gradient(135deg, #10b981, #059669);
-  --gradient-purple: linear-gradient(135deg, #8b5cf6, #7c3aed);
-  --gradient-hero: linear-gradient(135deg, #0f1629 0%, #1a1f3a 50%, #0f1629 100%);
+  --gradient-blue: linear-gradient(135deg, #c96f54, #af563b);
+  --gradient-emerald: linear-gradient(135deg, #78997d, #607d64);
+  --gradient-purple: linear-gradient(135deg, #c0a46d, #a88c52);
+  --gradient-hero: linear-gradient(135deg, #fbfaf7 0%, #f3efe6 100%);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
-  --shadow-glow-blue: 0 0 20px rgba(59, 130, 246, 0.3);
-  --shadow-glow-emerald: 0 0 20px rgba(16, 185, 129, 0.3);
+  --shadow-sm: 0 1px 3px rgba(60, 56, 48, 0.05);
+  --shadow-md: 0 6px 18px rgba(60, 56, 48, 0.07);
+  --shadow-lg: 0 12px 32px rgba(60, 56, 48, 0.1);
+  --shadow-glow-blue: 0 0 15px rgba(175, 86, 59, 0.15);
+  --shadow-glow-emerald: 0 0 15px rgba(96, 125, 100, 0.15);
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -48,7 +48,8 @@
   --transition-normal: 250ms ease;
   --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
 
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-family-serif: 'Fraunces', serif;
 }
 
 /* Reset */
@@ -71,6 +72,20 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.045; /* ultra-subtle natural sand grain texture */
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
 #root {
@@ -145,7 +160,8 @@ body {
 }
 
 .sidebar-logo-text {
-  font-size: 20px;
+  font-family: var(--font-family-serif);
+  font-size: 22px;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.5px;
@@ -256,7 +272,8 @@ body {
 }
 
 .page-title {
-  font-size: 24px;
+  font-family: var(--font-family-serif);
+  font-size: 28px;
   font-weight: 700;
   letter-spacing: -0.5px;
   margin-bottom: 4px;
@@ -306,7 +323,8 @@ body {
 }
 
 .card-title {
-  font-size: 16px;
+  font-family: var(--font-family-serif);
+  font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -408,7 +426,8 @@ body {
 }
 
 .company-name {
-  font-size: 20px;
+  font-family: var(--font-family-serif);
+  font-size: 22px;
   font-weight: 700;
   margin-bottom: 4px;
 }
