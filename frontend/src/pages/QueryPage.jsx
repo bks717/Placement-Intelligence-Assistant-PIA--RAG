@@ -89,7 +89,7 @@ export default function QueryPage() {
   return (
     <>
       <div className="page-header">
-        <h1 className="page-title">Ask PIA</h1>
+        <h1 className="page-title">Ask Puddy</h1>
         <p className="page-subtitle">Get cited answers from interview experiences and job descriptions</p>
       </div>
 

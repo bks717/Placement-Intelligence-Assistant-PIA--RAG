@@ -23,10 +23,6 @@ export default function Sidebar({ isCollapsed, onToggle }) {
           <div className="sidebar-logo-icon">
             <Brain size={22} />
           </div>
-          <div className="sidebar-logo-details">
-            <div className="sidebar-logo-text">PIA</div>
-            <div className="sidebar-logo-sub">Placement Intelligence</div>
-          </div>
         </div>
       </div>
 
@@ -38,7 +34,7 @@ export default function Sidebar({ isCollapsed, onToggle }) {
         </NavLink>
         <NavLink to="/query" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
           <MessageSquare size={18} />
-          <span className="nav-link-text">Ask PIA</span>
+          <span className="nav-link-text">Ask Puddy</span>
         </NavLink>
         <NavLink to="/companies" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
           <Building2 size={18} />

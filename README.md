@@ -1,166 +1,220 @@
-# PIA — Placement Intelligence Assistant
+# 🐾 Placement Buddy Puddy (Puddy)
 
-An AI-powered placement preparation platform built on a production-style **hybrid RAG pipeline** (BM25 + dense retrieval + cross-encoder re-ranking + source citations + evaluation harness).
+<p align="center">
+  <img src="./frontend/public/favicon.svg" alt="Puddy Logo" width="80" />
+</p>
 
-## Features
+<p align="center">
+  <strong>An AI-powered placement preparation platform built on a production-grade multi-stage RAG pipeline.</strong>
+</p>
 
-### MVP (Fully Built)
-- **Ingestion Pipeline**: PDF loader → doc-type-aware chunker → sentence-transformer embeddings → ChromaDB + structured store
-- **Hybrid Retrieval**: BM25 (keyword) + dense vector search with Reciprocal Rank Fusion (RRF)
-- **Cross-Encoder Re-ranking**: ms-marco-MiniLM re-scores top-20 → returns top-5 most relevant
-- **Source-Cited Q&A**: Every answer cites source file and page number; anti-hallucination guardrails
-- **Resume Analyzer**: Resume vs JD skill match + gap list + recommendations (PII-safe)
-- **Evaluation Harness**: 30 labeled Q&A pairs, precision@k / recall@k / MRR, before/after comparison
-- **Smart Query Router**: Intent detection routes between RAG, structured queries, and multi-company comparison
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.11%2B-blue?style=flat-square&logo=python" alt="Python" />
+  <img src="https://img.shields.io/badge/React-18.2%2B-61DAFB?style=flat-square&logo=react" alt="React" />
+  <img src="https://img.shields.io/badge/FastAPI-0.100%2B-009688?style=flat-square&logo=fastapi" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/ChromaDB-VectorStore-orange?style=flat-square" alt="ChromaDB" />
+  <img src="https://img.shields.io/badge/Gemini-2.5--Flash-red?style=flat-square&logo=google" alt="Gemini" />
+</p>
 
-### Stretch (Designed)
-- Preparation Roadmap Generator
-- Interview Pattern Mining + dashboards
-- AI Mock Interview with rubric-based grading
+---
 
-## Tech Stack
+## 📖 Table of Contents
+1. [Overview](#-overview)
+2. [Application Tab Tour (For New Users)](#-application-tab-tour-for-new-users)
+3. [Core Technical Architecture](#-core-technical-architecture)
+4. [Tech Stack](#-tech-stack)
+5. [Key Design Decisions](#-key-design-decisions)
+6. [Quick Start & Setup](#-quick-start--setup)
+7. [API Reference](#-api-reference)
+8. [Project Structure](#-project-structure)
 
-| Component | Technology |
-|-----------|-----------|
-| Backend | FastAPI, LangChain, Python 3.11+ |
-| LLM | Google Gemini (gemini-2.5-flash) |
-| Embeddings | sentence-transformers/all-MiniLM-L6-v2 |
-| Re-ranker | cross-encoder/ms-marco-MiniLM-L-6-v2 |
-| Vector DB | ChromaDB |
-| Structured Store | JSON (MongoDB-ready interface) |
-| Frontend | React + Vite + Vanilla CSS |
-| Evaluation | Custom harness + RAGAS-compatible |
+---
 
-## Quick Start
+## 🔍 Overview
 
-### 1. Clone & Setup
+**Placement Buddy Puddy (Puddy)** is a sophisticated, data-driven placement intelligence platform. It ingests company interview experience articles and job descriptions (JDs), extracting structured Q&A pairs and metadata, and serves them to students via a high-performance **hybrid RAG retrieval pipeline** (BM25 + dense embedding similarity search) refined by **Cross-Encoder re-ranking**.
 
+---
+
+## 🗺️ Application Tab Tour (For New Users)
+
+When you first open **Puddy**, you are greeted by an elegant, dark glassmorphic interface. Here is a walkthrough of each workspace tab:
+
+### 1. 📊 Dashboard
+* **What it is:** Your central command center.
+* **What it shows:** High-level metrics including total indexed **Companies**, ingested **Document Chunks**, extracted **Interview Questions**, and processed **Ingested Files**. 
+* **Key Features:** Provides a list of **Quick Queries** (one-click buttons for popular SQL/DSA company questions) and a list of recently ingested companies.
+
+### 2. 💬 Ask Puddy
+* **What it is:** The AI-powered conversational search assistant.
+* **What it shows:** An interactive, responsive chat workspace.
+* **Key Features:** Ask questions about specific companies, DSA topics, salary packages, or interview processes. Every answer is generated with **direct source citations** (linking back to the source PDF and page number) with anti-hallucination constraints.
+
+### 3. 🏢 Companies
+* **What it is:** The company database directory.
+* **What it shows:** A grid of cards for each indexed company (e.g. Walmart, Amazon, ProcDNA).
+* **Key Features:** Click any card to drill down into structured metadata (Salary CTC package, target role, eligibility criteria, required skills, and interview rounds) along with all historically extracted interview questions for that specific company.
+
+### 4. 📄 Resume Analyzer
+* **What it is:** A privacy-first skill gap assessment tool.
+* **What it shows:** A secure file drop-zone where you upload your resume PDF and specify a target company.
+* **Key Features:** The analyzer parses your resume, compares it against target company JDs, and outputs a **match score**, **matched skills**, **missing skills** (ranked by priority), and **personalized recommendations**. 
+* *Security Guardrail:* Your resume text is processed strictly in-memory and is **never** saved to database or log stores.
+
+### 5. 📈 Eval Dashboard
+* **What it is:** A quantitative pipeline validator.
+* **What it shows:** Baseline comparison metrics across different search algorithms.
+* **Key Features:** Compares **Dense Vector Search** vs **Hybrid Search** vs **Hybrid + Re-ranked** across standard Information Retrieval metrics (**Precision@K, Recall@K, Mean Reciprocal Rank (MRR)**, and **LLM-as-judge Faithfulness**). Demonstrates proof of retrieval optimization.
+
+### 6. ⚙️ Admin
+* **What it is:** The ingestion data loader panel.
+* **What it shows:** File upload zones and directory path ingestion utilities.
+* **Key Features:** Upload company experience sheets and JDs. Initiates loading, doc-type segmentation, embedding calculations, and concurrent Pydantic-validated entity extraction.
+
+---
+
+## 🛠️ Core Technical Architecture
+
+Puddy operates a multi-stage retrieval pipeline to maximize factual precision and context retrieval:
+
+```mermaid
+flowchart TD
+    A[User Query] --> B[Intent Router]
+    B -- Aggregation / Comparison Query --> C[Structured Database Query]
+    B -- Factual Retrieval Query --> D[Hybrid Retrieval Engine]
+    
+    subgraph D [Hybrid Retrieval Engine]
+        D1[Dense Search: ChromaDB with all-MiniLM-L6-v2]
+        D2[Sparse Search: BM25 on filtered chunks]
+        D1 & D2 --> D3[Reciprocal Rank Fusion - RRF]
+    end
+    
+    D3 --> E[Top 20 Chunks]
+    E --> F[Cross-Encoder Reranker: ms-marco-MiniLM-L-6-v2]
+    F --> G[Top 5 Relevant Chunks]
+    G --> H[LLM Generation: Gemini 2.5-Flash]
+    C --> H
+    H --> I[Response with Source Citations]
+```
+
+---
+
+## 💻 Tech Stack
+
+| Component | Technology | Description |
+|-----------|-----------|-------------|
+| **Frontend** | React 18, Vite, Vanilla CSS | Frost-glassmorphic UX with orbiting backlighting |
+| **Backend** | FastAPI, Python 3.11 | Fast, type-safe async python API |
+| **LLM** | Google Gemini (gemini-2.5-flash) | Generative responses + Pydantic structured output extraction |
+| **Embeddings** | sentence-transformers/all-MiniLM-L6-v2 | 384-dimensional dense vectors for semantic parsing |
+| **Re-ranker** | cross-encoder/ms-marco-MiniLM-L-6-v2 | Cross-attention similarity scoring for retrieval refinement |
+| **Vector DB** | ChromaDB | Local vector store with metadata filtering |
+| **Structured Store** | MongoDB / JSON fallbacks | Storage for metadata extraction and interview questions |
+| **Evaluations** | Custom Evaluation Harness | IR metrics calculation + Faithfulness LLM-as-judge scoring |
+
+---
+
+## ⚙️ Key Design Decisions
+
+1. **Pydantic Structured Outputs:** Entity extraction is validated via Pydantic model schemas (`InterviewQuestionsList`, `CompanyMetadata`), utilizing Gemini's structured output API.
+2. **Concurrent Ingestion Engine:** Structured extraction runs concurrently using `asyncio` throttled by `asyncio.Semaphore(5)` to maximize pipeline throughput.
+3. **Metadata Pre-Filtering:** Queries are filtered by company tags *before* running vector search, ensuring semantic context stays bounded.
+4. **Reciprocal Rank Fusion (RRF):** Fuses sparse BM25 scores (essential for matching exact terms like "SQL", "DFS") with dense semantic vector searches.
+5. **Cross-Encoder Re-ranking:** Re-scores top-20 chunks using full cross-attention. Cuts down context tokens from 20 chunks to the top-5 highly relevant segments.
+6. **Quantitative Evaluation:** Anchored on 30 labeled ground-truth Q&A pairs to mathematically prove pipeline updates.
+
+---
+
+## 🚀 Quick Start & Setup
+
+### 1. Clone & Environment Configuration
 ```powershell
 cd RAG_PROJECT
 
-# Copy env file and add your Gemini API key
+# Create environment configuration file
 copy .env.example .env
-# Edit .env → set GOOGLE_API_KEY
+```
+Open `.env` and configure your API key:
+```env
+GOOGLE_API_KEY=your_gemini_api_key_here
 ```
 
-### 2. Install Backend Dependencies
-
+### 2. Backend Installation & Setup
 ```powershell
-# Run from project root (RAG_PROJECT/)
-pip install -r backend\requirements.txt
-```
+# Install requirements
+pip install -r backend/requirements.txt
 
-### 3. Create Sample Data
-
-```powershell
-# IMPORTANT: Run from project root (RAG_PROJECT/), NOT from inside backend/
+# Populate sample company documents
 python -m backend.scripts.create_sample_data
-```
 
-### 4. Run Ingestion Pipeline
-
-```powershell
-# Run from project root (RAG_PROJECT/)
-# Basic ingestion (no LLM extraction — doesn't need API key)
-python -m backend.ingestion.pipeline --data-dir ./data --skip-extraction
-
-# Full ingestion (with structured extraction — needs API key)
+# Run Ingestion Pipeline (Skip extraction if API key isn't set)
 python -m backend.ingestion.pipeline --data-dir ./data
 ```
 
-### 5. Start Backend
-
+### 3. Start Servers
+**Start Backend Engine:**
 ```powershell
-# Run from project root (RAG_PROJECT/)
 python -m backend.main
-# API available at http://localhost:8000
-# Docs at http://localhost:8000/docs
+# Swagger Docs at: http://localhost:8000/docs
 ```
 
-### 6. Start Frontend
-
+**Start Frontend UI:**
 ```powershell
-# In a separate terminal
 cd frontend
 npm install
 npm run dev
-# UI available at http://localhost:5173
+# Dashboard at: http://localhost:5173
 ```
 
-### 7. Run Evaluation
-
+### 4. Running Pipeline Evaluation
 ```powershell
-# Run from project root (RAG_PROJECT/)
-# Retrieval metrics only
+# Run baseline queries
 python -m backend.eval.run_eval
 
-# With faithfulness scoring (requires API key)
+# Run with LLM-as-judge Faithfulness scoring
 python -m backend.eval.run_eval --faithfulness
 ```
 
-## Architecture
+---
 
-```
-User Query → Embedding → Metadata Filter (company=X)
-                |
-                ▼
-    Hybrid Retrieval (BM25 + dense) → top 20
-                |
-                ▼
-          Re-ranker → top 5
-                |
-                ▼
-     LLM (Gemini) + cited chunks
-                |
-                ▼
-    Answer with source + page citation
-```
+## 🔌 API Reference
 
-## API Endpoints
+### Retrieval & Generation
+* `POST /api/query`: Submits search query. Supports metadata filtering (e.g. `{ "query": "SQL questions", "company": "ProcDNA" }`).
+* `POST /api/resume/analyze`: Uploads resume PDF bytes and target company name for gap assessment.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/query` | RAG query with company filter |
-| `POST` | `/api/ingest` | Trigger ingestion pipeline |
-| `POST` | `/api/ingest/upload` | Upload + ingest PDFs |
-| `GET` | `/api/companies` | List all companies |
-| `GET` | `/api/companies/{name}` | Company details + questions |
-| `POST` | `/api/resume/analyze` | Resume gap analysis |
-| `POST` | `/api/eval/run` | Run evaluation harness |
-| `GET` | `/api/eval/results` | Get eval metrics |
-| `GET` | `/api/stats` | System statistics |
+### Ingestion & Admin
+* `POST /api/ingest`: Re-runs ingestion pipeline on the backend `./data` directory.
+* `POST /api/ingest/upload`: Direct upload of files to target data index.
+* `GET /api/companies`: Retrieves list of all indexed companies.
+* `GET /api/companies/{name}`: Retrieves structured company details and questions list.
 
-## Project Structure
+### Evaluation
+* `POST /api/eval/run`: Runs evaluation benchmark.
+* `GET /api/eval/results`: Retrieves historical benchmark files.
+
+---
+
+## 📂 Project Structure
 
 ```
 RAG_PROJECT/
 ├── backend/
-│   ├── main.py              # FastAPI app
-│   ├── config.py             # Pydantic settings
-│   ├── ingestion/            # PDF → chunks → embeddings
-│   ├── rag/                  # Hybrid retrieval + reranking + generation
-│   ├── eval/                 # Evaluation harness
-│   ├── resume/               # Resume analyzer
-│   ├── api/                  # FastAPI routes + schemas
-│   ├── db/                   # ChromaDB + structured store wrappers
-│   └── scripts/              # Data generation utilities
-├── frontend/                 # React + Vite
-│   └── src/
-│       ├── components/       # Sidebar
-│       ├── pages/            # Dashboard, Query, Companies, Resume, Eval, Admin
-│       └── services/         # API client
-├── data/                     # PDF documents (gitignored)
-├── .env.example
-├── docker-compose.yml
+│   ├── main.py              # FastAPI entrypoint
+│   ├── config.py            # App settings
+│   ├── ingestion/           # Ingestion, PDF loading & Pydantic extraction
+│   ├── rag/                 # Query routing, hybrid search, RRF & reranking
+│   ├── eval/                # Evaluation suite & metrics calculation
+│   ├── resume/              # Privacy-safe resume skill gap analyzer
+│   ├── api/                 # Endpoint routers & schemas
+│   ├── db/                  # Vector DB & structured DB connectors
+│   └── scripts/             # Mock sample PDF generator
+├── frontend/                # React Vite Dashboard
+│   ├── src/
+│   │   ├── components/      # Sidebar, SplashLoader
+│   │   ├── pages/           # Dashboard, Chat, Companies, Resume, Eval, Admin
+│   │   └── services/        # API client
+│   └── public/              # Favicon assets
+├── data/                    # PDF documents
 └── README.md
 ```
-
-## Key Design Decisions
-
-1. **Metadata filtering BEFORE retrieval** — cuts search space, doesn't post-filter
-2. **BM25 + Dense hybrid** — BM25 catches exact SQL keywords; dense captures semantic paraphrases
-3. **RRF fusion** — industry-standard score normalization between heterogeneous rankers
-4. **Cross-encoder re-ranking** — bi-encoders miss subtle relevance; cross-encoder does full attention
-5. **Dual storage** — vector DB for semantic search, structured store for aggregation queries
-6. **PII handling** — resume text never persisted; processed in-memory only
-7. **Evaluation harness** — quantitative proof with before/after numbers, not just "I added a reranker"

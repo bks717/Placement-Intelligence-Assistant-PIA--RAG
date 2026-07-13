@@ -64,7 +64,7 @@ export default function Dashboard() {
               <span style={{ color: 'var(--accent-amber)', fontSize: 13, fontWeight: 600 }}>AI-Powered</span>
             </div>
             <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>
-              Welcome to PIA — Placement Intelligence Assistant
+              Welcome to Placement Buddy Puddy
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: 14, maxWidth: 600, marginBottom: 16 }}>
               Analyze job descriptions, retrieve interview experiences with source citations,
