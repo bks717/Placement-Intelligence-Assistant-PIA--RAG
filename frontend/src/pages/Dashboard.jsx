@@ -53,7 +53,7 @@ export default function Dashboard() {
       <div className="page-body">
         {/* Hero section */}
         <div className="card" style={{
-          background: 'linear-gradient(135deg, rgba(175, 86, 59, 0.08), rgba(168, 140, 82, 0.08))',
+          background: 'var(--gradient-hero)',
           marginBottom: 24,
           position: 'relative',
           overflow: 'hidden',

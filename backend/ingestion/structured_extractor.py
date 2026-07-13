@@ -4,18 +4,39 @@ Structured Extractor
 Uses Gemini LLM to extract structured data from interview experience
 and JD chunks. Stores extracted records in the structured data store.
 
-Extracts:
-- Interview questions with round, difficulty, topic tags
-- Company metadata (package, role, skills)
+Guaranteed parsing accuracy using Pydantic schemas and concurrent processing.
 """
 
-import json
 import os
+import asyncio
 from loguru import logger
+from pydantic import BaseModel, Field
 
 from backend.config import settings
 from backend.ingestion.pdf_loader import Document
 from backend.db.mongo_store import structured_store
+
+
+# --- Pydantic Models for Structured Output ---
+
+class InterviewQuestion(BaseModel):
+    question: str = Field(description="The actual question text asked in the interview")
+    round: str = Field(description="The round, e.g. Technical, HR, Aptitude, Coding, OA, GD. If not clear, use 'Unknown'.")
+    difficulty: str = Field(description="Difficulty level: Easy, Medium, Hard. If not clear, use 'Medium'.")
+    topic: str = Field(description="Topic tag, e.g. SQL, Python, DSA, DBMS, System Design, Behavioral. If not clear, use 'General'.")
+
+
+class InterviewQuestionsList(BaseModel):
+    questions: list[InterviewQuestion] = Field(description="List of extracted interview questions")
+
+
+class CompanyMetadata(BaseModel):
+    company: str = Field(description="Company name")
+    package: str = Field(description="Salary/CTC if mentioned, e.g. 16 LPA. Use 'Not mentioned' if not found.")
+    role: str = Field(description="Job role/position if mentioned. Use 'Not specified' if not found.")
+    skills: list[str] = Field(description="List of required/tested skills mentioned")
+    rounds: list[str] = Field(description="List of interview rounds mentioned")
+    eligibility: str = Field(description="Eligibility criteria if mentioned. Use 'Not mentioned' if not found.")
 
 
 def _get_llm():
@@ -31,123 +52,80 @@ def _get_llm():
 
 EXTRACT_QUESTIONS_PROMPT = """You are a structured data extractor. Given text from an interview experience document, extract all interview questions mentioned.
 
-For each question, provide:
-- question: The actual question text
-- round: The interview round (e.g., "Technical", "HR", "Aptitude", "Coding", "Online Assessment", "Group Discussion"). If not clear, use "Unknown".
-- difficulty: Estimated difficulty ("Easy", "Medium", "Hard"). If not clear, use "Medium".
-- topic: The topic/category (e.g., "SQL", "Python", "DSA", "DBMS", "Statistics", "Aptitude", "System Design", "Behavioral", "OS", "Networking"). If not clear, use "General".
-
-Return a JSON array of objects. If no questions are found, return an empty array [].
-
-IMPORTANT: Only extract actual interview questions. Do not fabricate or add questions that aren't in the text.
+Only extract actual interview questions. Do not fabricate or add questions that aren't in the text.
 
 Text:
-{text}
-
-JSON Output:"""
+{text}"""
 
 
 EXTRACT_COMPANY_PROMPT = """You are a structured data extractor. Given text from an interview experience or job description document for company "{company}", extract company metadata.
 
-Provide:
-- company: Company name
-- package: Salary/CTC if mentioned (e.g., "16 LPA", "12-15 LPA"). Use "Not mentioned" if not found.
-- role: Job role/position if mentioned. Use "Not mentioned" if not found.
-- skills: List of required/tested skills mentioned (e.g., ["SQL", "Python", "Statistics"])
-- rounds: List of interview rounds mentioned (e.g., ["Online Assessment", "Technical", "HR"])
-- eligibility: Eligibility criteria if mentioned. Use "Not mentioned" if not found.
-
-Return a single JSON object.
-
 Text:
-{text}
-
-JSON Output:"""
-
-
-def extract_questions_from_chunk(chunk: Document) -> list[dict]:
-    """
-    Extract structured questions from a single chunk using LLM.
-
-    Returns list of question dicts with metadata from the chunk.
-    """
-    try:
-        llm = _get_llm()
-        prompt = EXTRACT_QUESTIONS_PROMPT.format(text=chunk.text)
-        response = llm.invoke(prompt)
-
-        # Parse JSON from response
-        content = response.content.strip()
-        # Handle markdown code blocks
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1]
-            content = content.rsplit("```", 1)[0]
-
-        questions = json.loads(content)
-
-        # Enrich with chunk metadata
-        for q in questions:
-            q["company"] = chunk.metadata.get("company", "Unknown")
-            q["source_doc"] = chunk.metadata.get("source_file", "")
-            q["source_page"] = chunk.metadata.get("page_number", 0)
-            q["chunk_id"] = chunk.metadata.get("chunk_id", "")
-
-        return questions
-
-    except json.JSONDecodeError as e:
-        logger.warning(f"Failed to parse LLM response as JSON: {e}")
-        return []
-    except Exception as e:
-        logger.error(f"Error extracting questions: {e}")
-        return []
+{text}"""
 
 
 def extract_company_info(chunks: list[Document], company: str) -> dict:
     """
     Extract company metadata from the first few chunks of a company's documents.
-    Uses the first chunks which typically contain overview info.
+    Uses Pydantic structured output validation.
     """
-    # Combine first 3 chunks for context
     combined_text = "\n\n".join(
         c.text for c in chunks[:3]
     )
 
     try:
         llm = _get_llm()
+        structured_llm = llm.with_structured_output(CompanyMetadata)
         prompt = EXTRACT_COMPANY_PROMPT.format(
-            company=company, text=combined_text
+            company=company, text=combined_text[:6000]
         )
-        response = llm.invoke(prompt)
-
-        content = response.content.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1]
-            content = content.rsplit("```", 1)[0]
-
-        return json.loads(content)
+        response = structured_llm.invoke(prompt)
+        return response.model_dump()
 
     except Exception as e:
         logger.error(f"Error extracting company info for {company}: {e}")
         return {
             "company": company,
             "package": "Not mentioned",
-            "role": "Not mentioned",
+            "role": "Not specified",
             "skills": [],
             "rounds": [],
             "eligibility": "Not mentioned",
         }
 
 
-def extract_and_store(chunks: list[Document]) -> dict:
+async def extract_questions_from_chunk_async(chunk: Document, sem: asyncio.Semaphore) -> list[dict]:
     """
-    Extract structured data from all chunks and store in structured DB.
-
-    Args:
-        chunks: List of Document chunks (already chunked and embedded)
-
-    Returns:
-        Summary dict with counts of extracted items
+    Extract structured questions from a single chunk asynchronously using ThreadPool executor
+    to prevent blocking. Guaranteed type safety with Pydantic.
     """
+    async with sem:
+        loop = asyncio.get_running_loop()
+        try:
+            llm = _get_llm()
+            structured_llm = llm.with_structured_output(InterviewQuestionsList)
+            prompt = EXTRACT_QUESTIONS_PROMPT.format(text=chunk.text)
+
+            # LangChain invoke is synchronous and network-blocking, run in executor
+            result = await loop.run_in_executor(None, lambda: structured_llm.invoke(prompt))
+            questions = [q.model_dump() for q in result.questions]
+
+            # Enrich with metadata
+            for q in questions:
+                q["company"] = chunk.metadata.get("company", "Unknown")
+                q["source_doc"] = chunk.metadata.get("source_file", "")
+                q["source_page"] = chunk.metadata.get("page_number", 0)
+                q["chunk_id"] = chunk.metadata.get("chunk_id", "")
+
+            return questions
+
+        except Exception as e:
+            logger.error(f"Error extracting questions: {e}")
+            return []
+
+
+async def extract_and_store_async(chunks: list[Document]) -> dict:
+    """Async engine for chunk grouping and concurrent LLM extraction."""
     if not chunks:
         return {"questions": 0, "companies": 0}
 
@@ -156,12 +134,14 @@ def extract_and_store(chunks: list[Document]) -> dict:
     for chunk in chunks:
         company = chunk.metadata.get("company", "Unknown")
         doc_type = chunk.metadata.get("doc_type", "")
-        # Only extract from interview experiences and JDs
         if doc_type in ("interview_experience", "job_description"):
             company_chunks.setdefault(company, []).append(chunk)
 
     total_questions = 0
     total_companies = 0
+
+    # Limit concurrent Gemini requests to 5 to avoid API rate limiting
+    sem = asyncio.Semaphore(5)
 
     for company, c_chunks in company_chunks.items():
         logger.info(f"Extracting structured data for: {company} ({len(c_chunks)} chunks)")
@@ -174,13 +154,15 @@ def extract_and_store(chunks: list[Document]) -> dict:
             total_companies += 1
             logger.info(f"  Stored company info: {company}")
 
-        # Extract questions from interview experience chunks
+        # Extract questions concurrently from all interview experiences
         ie_chunks = [c for c in c_chunks if c.metadata.get("doc_type") == "interview_experience"]
-        for chunk in ie_chunks:
-            questions = extract_questions_from_chunk(chunk)
-            if questions:
-                # Deduplicate by question text + company
-                for q in questions:
+        if ie_chunks:
+            tasks = [extract_questions_from_chunk_async(chunk, sem) for chunk in ie_chunks]
+            results = await asyncio.gather(*tasks)
+
+            # Flatten results and insert unique items
+            for questions_list in results:
+                for q in questions_list:
                     existing_q = structured_store.find_one(
                         "interview_questions",
                         {"question": q["question"], "company": q["company"]},
@@ -191,6 +173,27 @@ def extract_and_store(chunks: list[Document]) -> dict:
 
         logger.info(f"  Extracted {total_questions} questions for {company}")
 
-    summary = {"questions": total_questions, "companies": total_companies}
-    logger.info(f"Extraction complete: {summary}")
-    return summary
+    return {"questions": total_questions, "companies": total_companies}
+
+
+def extract_and_store(chunks: list[Document]) -> dict:
+    """
+    Sync entrypoint to execute the async extraction engine safely,
+    compatible with both CLI and running ASGI/FastAPI event loops.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    coro = extract_and_store_async(chunks)
+
+    try:
+        # Check if an event loop is already running
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # No loop running, simple run
+        return asyncio.run(coro)
+
+    # A loop is running (FastAPI), launch in a separate thread to prevent blocking
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(lambda: asyncio.run(coro))
+        return future.result()
+
