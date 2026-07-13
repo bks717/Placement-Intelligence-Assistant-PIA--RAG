@@ -560,12 +560,13 @@ def create_sample_pdfs(data_dir: str = "./data"):
             # Create PDF using pymupdf
             doc = fitz.open()
 
-            # Split content into pages (roughly 3000 chars per page)
+            # Split content into pages
             lines = content.strip().split("\n")
             current_page_text = ""
+            line_count = 0
 
             for line in lines:
-                if len(current_page_text) + len(line) > 3000:
+                if len(current_page_text) + len(line) > 2000 or line_count >= 40:
                     # Create new page
                     page = doc.new_page()
                     text_rect = fitz.Rect(50, 50, 545, 792)
@@ -576,8 +577,10 @@ def create_sample_pdfs(data_dir: str = "./data"):
                         fontname="helv",
                     )
                     current_page_text = line + "\n"
+                    line_count = 1
                 else:
                     current_page_text += line + "\n"
+                    line_count += 1
 
             # Last page
             if current_page_text.strip():

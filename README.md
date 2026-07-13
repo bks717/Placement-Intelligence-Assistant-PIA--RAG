@@ -35,30 +35,32 @@ An AI-powered placement preparation platform built on a production-style **hybri
 
 ### 1. Clone & Setup
 
-```bash
+```powershell
 cd RAG_PROJECT
 
 # Copy env file and add your Gemini API key
-cp .env.example .env
+copy .env.example .env
 # Edit .env → set GOOGLE_API_KEY
 ```
 
 ### 2. Install Backend Dependencies
 
-```bash
-cd backend
-pip install -r requirements.txt
+```powershell
+# Run from project root (RAG_PROJECT/)
+pip install -r backend\requirements.txt
 ```
 
 ### 3. Create Sample Data
 
-```bash
+```powershell
+# IMPORTANT: Run from project root (RAG_PROJECT/), NOT from inside backend/
 python -m backend.scripts.create_sample_data
 ```
 
 ### 4. Run Ingestion Pipeline
 
-```bash
+```powershell
+# Run from project root (RAG_PROJECT/)
 # Basic ingestion (no LLM extraction — doesn't need API key)
 python -m backend.ingestion.pipeline --data-dir ./data --skip-extraction
 
@@ -68,7 +70,8 @@ python -m backend.ingestion.pipeline --data-dir ./data
 
 ### 5. Start Backend
 
-```bash
+```powershell
+# Run from project root (RAG_PROJECT/)
 python -m backend.main
 # API available at http://localhost:8000
 # Docs at http://localhost:8000/docs
@@ -76,7 +79,8 @@ python -m backend.main
 
 ### 6. Start Frontend
 
-```bash
+```powershell
+# In a separate terminal
 cd frontend
 npm install
 npm run dev
@@ -85,7 +89,8 @@ npm run dev
 
 ### 7. Run Evaluation
 
-```bash
+```powershell
+# Run from project root (RAG_PROJECT/)
 # Retrieval metrics only
 python -m backend.eval.run_eval
 
