@@ -8,6 +8,11 @@ Configures CORS, registers routes, and manages application lifecycle.
 import os
 import sys
 
+# Configure environment variables for Vercel serverless environment
+if os.environ.get("VERCEL"):
+    os.environ["HOME"] = "/tmp"
+    os.environ["HF_HOME"] = "/tmp/hf_home"
+
 # Add parent directory to sys.path to allow "backend.xxx" imports when running inside backend/ root
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 

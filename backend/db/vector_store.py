@@ -60,8 +60,12 @@ class VectorStore:
             self._embedding_model = None
 
         if self._embedding_model is None:
-            from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
-            self._embedding_ef = DefaultEmbeddingFunction()
+            try:
+                from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+                self._embedding_ef = DefaultEmbeddingFunction()
+            except Exception as e:
+                logger.error(f"Failed to initialize DefaultEmbeddingFunction: {e}. Dense retrieval will be unavailable.")
+                self._embedding_ef = None
 
         logger.info(
             f"Vector store ready. Collection has {self._collection.count()} chunks."
@@ -86,18 +90,16 @@ class VectorStore:
         """Embed a single text string."""
         if self.embedding_model is not None:
             return self.embedding_model.encode(text).tolist()
-        if not hasattr(self, "_embedding_ef"):
-            from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
-            self._embedding_ef = DefaultEmbeddingFunction()
+        if not hasattr(self, "_embedding_ef") or self._embedding_ef is None:
+            raise RuntimeError("ChromaDB DefaultEmbeddingFunction is unavailable. Try pushing/saving your embeddings offline.")
         return self._embedding_ef([text])[0]
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         """Embed multiple text strings."""
         if self.embedding_model is not None:
             return self.embedding_model.encode(texts).tolist()
-        if not hasattr(self, "_embedding_ef"):
-            from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
-            self._embedding_ef = DefaultEmbeddingFunction()
+        if not hasattr(self, "_embedding_ef") or self._embedding_ef is None:
+            raise RuntimeError("ChromaDB DefaultEmbeddingFunction is unavailable. Try pushing/saving your embeddings offline.")
         return self._embedding_ef(texts)
 
     def add_chunks(
