@@ -15,8 +15,7 @@ langchain-text-splitters>=0.3.6
 # Vector Store
 chromadb>=1.0.0
 
-# Embeddings & Reranking
-sentence-transformers>=4.0.0
+# Embeddings & Reranking (removed sentence-transformers to prevent PyTorch Vercel build failures)
 
 # BM25
 rank-bm25>=0.2.2

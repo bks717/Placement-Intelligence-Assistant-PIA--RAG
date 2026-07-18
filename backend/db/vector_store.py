@@ -8,7 +8,11 @@ company/doc_type scoped retrieval.
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
-from sentence_transformers import SentenceTransformer
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    SentenceTransformer = None
+
 from typing import Optional
 from loguru import logger
 
@@ -45,7 +49,20 @@ class VectorStore:
                 metadata={"hnsw:space": "cosine"},
             )
         logger.info(f"Loading embedding model: {settings.embedding_model}")
-        self._embedding_model = SentenceTransformer(settings.embedding_model)
+        if SentenceTransformer is not None:
+            try:
+                self._embedding_model = SentenceTransformer(settings.embedding_model)
+            except Exception as e:
+                logger.warning(f"Could not load SentenceTransformer: {e}. Falling back to DefaultEmbeddingFunction.")
+                self._embedding_model = None
+        else:
+            logger.info("SentenceTransformer not installed. Falling back to DefaultEmbeddingFunction (ONNX).")
+            self._embedding_model = None
+
+        if self._embedding_model is None:
+            from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+            self._embedding_ef = DefaultEmbeddingFunction()
+
         logger.info(
             f"Vector store ready. Collection has {self._collection.count()} chunks."
         )
@@ -57,18 +74,31 @@ class VectorStore:
         return self._collection
 
     @property
-    def embedding_model(self) -> SentenceTransformer:
-        if self._embedding_model is None:
-            self.initialize()
+    def embedding_model(self) -> Optional[SentenceTransformer]:
+        if self._embedding_model is None and SentenceTransformer is not None:
+            try:
+                self.initialize()
+            except Exception:
+                pass
         return self._embedding_model
 
     def embed_text(self, text: str) -> list[float]:
         """Embed a single text string."""
-        return self.embedding_model.encode(text).tolist()
+        if self.embedding_model is not None:
+            return self.embedding_model.encode(text).tolist()
+        if not hasattr(self, "_embedding_ef"):
+            from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+            self._embedding_ef = DefaultEmbeddingFunction()
+        return self._embedding_ef([text])[0]
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         """Embed multiple text strings."""
-        return self.embedding_model.encode(texts).tolist()
+        if self.embedding_model is not None:
+            return self.embedding_model.encode(texts).tolist()
+        if not hasattr(self, "_embedding_ef"):
+            from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+            self._embedding_ef = DefaultEmbeddingFunction()
+        return self._embedding_ef(texts)
 
     def add_chunks(
         self,

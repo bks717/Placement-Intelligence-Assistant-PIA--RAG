@@ -26,9 +26,7 @@ from backend.api.schemas import (
     StatsResponse,
 )
 from backend.rag.query_router import route_query
-from backend.ingestion.pipeline import run_pipeline
 from backend.resume.analyzer import analyze_resume
-from backend.eval.run_eval import run_full_eval
 from backend.db.mongo_store import structured_store
 from backend.db.vector_store import vector_store
 from backend.config import settings
@@ -85,6 +83,7 @@ async def ingest_endpoint(
     logger.info(f"Ingestion triggered | dir={target_dir}")
 
     try:
+        from backend.ingestion.pipeline import run_pipeline
         result = run_pipeline(
             data_dir=target_dir,
             skip_extraction=skip_extraction,
@@ -140,6 +139,7 @@ async def upload_and_ingest(
         raise HTTPException(status_code=400, detail="No valid PDF files uploaded")
 
     # Run ingestion pipeline
+    from backend.ingestion.pipeline import run_pipeline
     result = run_pipeline(
         data_dir=settings.data_dir,
         skip_extraction=skip_extraction,
@@ -278,6 +278,7 @@ async def analyze_resume_endpoint(
 async def run_eval_endpoint(request: EvalRunRequest):
     """Trigger the evaluation harness."""
     try:
+        from backend.eval.run_eval import run_full_eval
         results = run_full_eval(
             modes=request.modes,
             include_faithfulness=request.include_faithfulness,

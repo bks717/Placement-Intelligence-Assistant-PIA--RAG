@@ -13,7 +13,11 @@ Model: cross-encoder/ms-marco-MiniLM-L-6-v2 — production-proven,
 fast enough for top-20 re-ranking on CPU.
 """
 
-from sentence_transformers import CrossEncoder
+try:
+    from sentence_transformers import CrossEncoder
+except ImportError:
+    CrossEncoder = None
+
 from typing import Optional
 from loguru import logger
 
@@ -24,9 +28,12 @@ from backend.config import settings
 _reranker: Optional[CrossEncoder] = None
 
 
-def get_reranker() -> CrossEncoder:
+def get_reranker() -> Optional[CrossEncoder]:
     """Load the cross-encoder model (lazy singleton)."""
     global _reranker
+    if CrossEncoder is None:
+        logger.warning("sentence-transformers is not installed. Reranking will be disabled.")
+        return None
     if _reranker is None:
         logger.info(f"Loading reranker model: {settings.reranker_model}")
         _reranker = CrossEncoder(settings.reranker_model)
@@ -68,6 +75,11 @@ def rerank(
         return chunks
 
     model = get_reranker()
+    if model is None:
+        for chunk in chunks:
+            if "rerank_score" not in chunk:
+                chunk["rerank_score"] = 1.0
+        return chunks[:top_k]
 
     # Create (query, document) pairs for cross-encoder
     pairs = [(query, chunk["text"]) for chunk in chunks]
