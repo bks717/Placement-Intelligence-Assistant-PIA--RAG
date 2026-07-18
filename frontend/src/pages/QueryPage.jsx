@@ -68,7 +68,7 @@ export default function QueryPage() {
     } catch (err) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `Error: ${err.message}. Make sure the backend is running at http://localhost:8000`,
+        content: `Error: ${err.message}. Make sure the backend service is running and accessible.`,
         sources: [],
         timestamp: new Date(),
         error: true,

@@ -2,7 +2,7 @@
  * PIA API Service — handles all backend communication.
  */
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = '/api';
 
 class APIService {
   async request(endpoint, options = {}) {
@@ -112,7 +112,7 @@ class APIService {
 
   // Health
   async healthCheck() {
-    const response = await fetch('http://localhost:8000/health');
+    const response = await fetch('/api/health');
     return response.json();
   }
 }

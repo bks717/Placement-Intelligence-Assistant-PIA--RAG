@@ -26,14 +26,24 @@ class VectorStore:
     def initialize(self):
         """Initialize ChromaDB client and embedding model."""
         logger.info(f"Initializing ChromaDB at: {settings.chroma_persist_dir}")
-        self._client = chromadb.PersistentClient(
-            path=settings.chroma_persist_dir,
-            settings=ChromaSettings(anonymized_telemetry=False),
-        )
-        self._collection = self._client.get_or_create_collection(
-            name="pia_chunks",
-            metadata={"hnsw:space": "cosine"},
-        )
+        try:
+            self._client = chromadb.PersistentClient(
+                path=settings.chroma_persist_dir,
+                settings=ChromaSettings(anonymized_telemetry=False),
+            )
+            self._collection = self._client.get_or_create_collection(
+                name="pia_chunks",
+                metadata={"hnsw:space": "cosine"},
+            )
+        except Exception as e:
+            logger.warning(f"Failed to initialize ChromaDB PersistentClient: {e}. Falling back to EphemeralClient.")
+            self._client = chromadb.EphemeralClient(
+                settings=ChromaSettings(anonymized_telemetry=False)
+            )
+            self._collection = self._client.get_or_create_collection(
+                name="pia_chunks",
+                metadata={"hnsw:space": "cosine"},
+            )
         logger.info(f"Loading embedding model: {settings.embedding_model}")
         self._embedding_model = SentenceTransformer(settings.embedding_model)
         logger.info(

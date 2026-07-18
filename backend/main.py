@@ -5,11 +5,16 @@ FastAPI Application Entry Point
 Configures CORS, registers routes, and manages application lifecycle.
 """
 
+import os
+import sys
+
+# Add parent directory to sys.path to allow "backend.xxx" imports when running inside backend/ root
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
-import sys
 
 from backend.config import settings
 from backend.api.routes import router
@@ -22,12 +27,13 @@ logger.add(
     format="<green>{time:HH:mm:ss}</green> | <level>{level:<7}</level> | <cyan>{name}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
     level="INFO",
 )
-logger.add(
-    "logs/pia_{time:YYYY-MM-DD}.log",
-    rotation="1 day",
-    retention="7 days",
-    level="DEBUG",
-)
+if not os.environ.get("VERCEL"):
+    logger.add(
+        "logs/pia_{time:YYYY-MM-DD}.log",
+        rotation="1 day",
+        retention="7 days",
+        level="DEBUG",
+    )
 
 
 @asynccontextmanager
@@ -87,6 +93,7 @@ app.include_router(router)
 
 
 # Health check
+@app.get("/api/health")
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "PIA"}

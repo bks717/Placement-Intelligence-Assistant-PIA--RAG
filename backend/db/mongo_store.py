@@ -27,7 +27,10 @@ class JSONStore:
 
     def __init__(self, store_dir: Optional[str] = None):
         self.store_dir = Path(store_dir or settings.json_store_dir)
-        self.store_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.store_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            logger.warning(f"Could not create store directory {self.store_dir}: {e}. If running on Vercel, this is expected.")
         self._cache: dict[str, list[dict]] = {}
 
     def _get_path(self, collection: str) -> Path:
