@@ -1,3 +1,9 @@
+[project]
+name = "pia-backend"
+version = "0.1.0"
+description = "PIA Backend Service"
+dependencies = []
+
 [tool.fastapi]
 entrypoint = "main:app"
 
