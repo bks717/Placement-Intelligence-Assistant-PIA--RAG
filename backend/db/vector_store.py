@@ -6,8 +6,15 @@ with embeddings and metadata. Supports metadata pre-filtering for
 company/doc_type scoped retrieval.
 """
 
-import chromadb
-from chromadb.config import Settings as ChromaSettings
+try:
+    import chromadb
+    from chromadb.config import Settings as ChromaSettings
+except ImportError as e:
+    logger = None
+    chromadb = None
+    ChromaSettings = None
+    import sys
+    sys.stderr.write(f"Warning: Could not import chromadb: {e}\n")
 try:
     from sentence_transformers import SentenceTransformer
 except ImportError:
@@ -29,6 +36,9 @@ class VectorStore:
 
     def initialize(self):
         """Initialize ChromaDB client and embedding model."""
+        if chromadb is None:
+            logger.warning("ChromaDB is not installed or failed to import. Vector store functions will be disabled.")
+            return
         logger.info(f"Initializing ChromaDB at: {settings.chroma_persist_dir}")
         try:
             self._client = chromadb.PersistentClient(
@@ -68,11 +78,13 @@ class VectorStore:
                 self._embedding_ef = None
 
         logger.info(
-            f"Vector store ready. Collection has {self._collection.count()} chunks."
+            f"Vector store ready. Collection has {self._collection.count() if self._collection else 0} chunks."
         )
 
     @property
-    def collection(self) -> chromadb.Collection:
+    def collection(self) -> Optional[chromadb.Collection]:
+        if chromadb is None:
+            return None
         if self._collection is None:
             self.initialize()
         return self._collection
