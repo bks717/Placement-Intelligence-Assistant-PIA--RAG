@@ -50,9 +50,12 @@ class JSONStore:
 
     def _save(self, collection: str):
         """Persist a collection to disk."""
-        path = self._get_path(collection)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(self._cache.get(collection, []), f, indent=2, ensure_ascii=False)
+        try:
+            path = self._get_path(collection)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self._cache.get(collection, []), f, indent=2, ensure_ascii=False)
+        except (OSError, PermissionError) as e:
+            logger.warning(f"Could not persist JSONStore collection '{collection}' to disk: {e}")
 
     def insert(self, collection: str, document: dict) -> str:
         """Insert a document into a collection. Returns the document ID."""

@@ -18,6 +18,10 @@ class Settings(BaseSettings):
         import os
         if not self.google_api_key:
             self.google_api_key = os.environ.get("GOOGLE_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "")
+        if os.environ.get("VERCEL"):
+            self.chroma_persist_dir = "/tmp/chroma_data"
+            self.json_store_dir = "/tmp/json_data"
+            self.data_dir = "/tmp/data"
 
     # --- ChromaDB ---
     chroma_persist_dir: str = Field(default="./chroma_data")
