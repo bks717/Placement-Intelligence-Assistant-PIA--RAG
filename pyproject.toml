@@ -1,2 +1,5 @@
+[tool.fastapi]
+entrypoint = "backend.main:app"
+
 [tool.vercel]
 entrypoint = "backend/main.py:app"
