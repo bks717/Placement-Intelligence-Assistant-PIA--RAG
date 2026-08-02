@@ -10,7 +10,10 @@ PII: Both PDFs processed in-memory only — never persisted.
 import os
 import re
 import json
-import fitz
+try:
+    import fitz
+except ImportError:
+    fitz = None
 from typing import Optional
 from loguru import logger
 
@@ -22,6 +25,9 @@ from backend.config import settings
 # ─────────────────────────────────────────────
 
 def _extract_text(pdf_bytes: bytes, label: str) -> str:
+    if fitz is None:
+        logger.error(f"PyMuPDF is not available. Cannot extract text from {label}.")
+        return ""
     try:
         pdf = fitz.open(stream=pdf_bytes, filetype="pdf")
         pages = [p.get_text("text").strip() for p in pdf if p.get_text("text").strip()]

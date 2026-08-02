@@ -33,7 +33,10 @@ import time
 from typing import Optional
 from urllib.parse import quote_plus
 
-import fitz
+try:
+    import fitz
+except ImportError:
+    fitz = None
 from loguru import logger
 
 from backend.config import settings

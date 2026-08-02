@@ -5,7 +5,10 @@ Extracts text from PDF files using pymupdf with page-number tracking.
 Auto-detects doc_type from folder path and company from filename.
 """
 
-import fitz  # pymupdf
+try:
+    import fitz  # pymupdf
+except ImportError:
+    fitz = None
 from pathlib import Path
 from dataclasses import dataclass, field
 from loguru import logger
@@ -93,6 +96,9 @@ def load_pdf(file_path: str | Path) -> list[Document]:
         f"doc_type={doc_type} | company={company}"
     )
 
+    if fitz is None:
+        logger.error("PyMuPDF (fitz) is not available. Cannot load PDF.")
+        return []
     documents = []
     try:
         pdf = fitz.open(str(file_path))
