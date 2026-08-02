@@ -29,7 +29,17 @@ class Settings(BaseSettings):
     embedding_model: str = Field(default="sentence-transformers/all-MiniLM-L6-v2")
     reranker_model: str = Field(default="cross-encoder/ms-marco-MiniLM-L-6-v2")
     llm_model: str = Field(default="gemini-2.5-flash")
+    # Fast model for structured JSON extraction (resume analyzer, ingestion).
+    # Thinking models (2.5-flash / flash-latest) burn 30-50s of internal reasoning
+    # on mechanical extraction tasks and hit 504 DEADLINE_EXCEEDED — a lite model
+    # returns in ~2s with equal JSON quality for this workload.
+    llm_extraction_model: str = Field(default="gemini-3.1-flash-lite")
     llm_temperature: float = Field(default=0.2)
+
+    # Grounded company research (About the Company). NOTE: Google Search
+    # grounding requires a FULL model — lite models return instant 429
+    # RESOURCE_EXHAUSTED on free tier. gemini-2.5-flash returns in ~4-7s.
+    llm_grounding_model: str = Field(default="gemini-2.5-flash")
 
     # --- Retrieval ---
     dense_weight: float = Field(default=0.5)

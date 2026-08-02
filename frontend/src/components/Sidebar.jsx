@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   Building2,
+  Zap,
   FileText,
   Settings,
   BarChart3,
@@ -38,7 +39,11 @@ export default function Sidebar({ isCollapsed, onToggle }) {
         </NavLink>
         <NavLink to="/companies" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
           <Building2 size={18} />
-          <span className="nav-link-text">Companies</span>
+          <span className="nav-link-text">About Company</span>
+        </NavLink>
+        <NavLink to="/fast-prep" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <Zap size={18} />
+          <span className="nav-link-text">Fast Prep</span>
         </NavLink>
 
         <div className="nav-section-label">Tools</div>

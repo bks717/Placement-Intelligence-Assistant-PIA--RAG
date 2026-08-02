@@ -1,246 +1,309 @@
 """
-Resume Analyzer
+Resume Analyzer — ATS-Style Analysis
 
-Extracts skills from a resume PDF, compares against a JD's skill list,
-and outputs a gap analysis with match score.
+Fast path: ONE Gemini call returning plain JSON (no structured_output overhead).
+Rule-based formatting checks run first (zero API cost).
 
-PII Handling: Resume text is processed in-memory only — never persisted
-to database or logs. This is an intentional guardrail.
+PII: Both PDFs processed in-memory only — never persisted.
 """
 
 import os
+import re
 import json
-import fitz  # pymupdf
-from pathlib import Path
+import fitz
 from typing import Optional
 from loguru import logger
 
 from backend.config import settings
-from backend.db.mongo_store import structured_store
-from backend.rag.retriever import hybrid_retrieve
 
 
-def _get_llm():
-    """Lazy-load the Gemini LLM."""
-    from langchain_google_genai import ChatGoogleGenerativeAI
+# ─────────────────────────────────────────────
+# PDF extraction
+# ─────────────────────────────────────────────
 
-    os.environ.setdefault("GOOGLE_API_KEY", settings.google_api_key)
-    return ChatGoogleGenerativeAI(
-        model=settings.llm_model,
-        temperature=0.1,
-    )
-
-
-EXTRACT_SKILLS_PROMPT = """You are a skill extraction expert. Extract all technical and professional skills from the following {doc_type} text.
-
-Return a JSON object with:
-- skills: List of skill names (normalize to standard names, e.g., "Structured Query Language" → "SQL", "Machine Learning" → "ML")
-- experience_level: For each skill, estimate the level if possible ("beginner", "intermediate", "advanced"). If not determinable, use "unknown".
-
-Return format:
-{{"skills": ["SQL", "Python", "React", ...], "skill_details": [{{"skill": "SQL", "level": "intermediate"}}, ...]}}
-
-{doc_type} Text:
-{text}
-
-JSON Output:"""
-
-
-GAP_ANALYSIS_PROMPT = """You are a career advisor. Given a candidate's skills and a job description's required skills, provide a detailed gap analysis.
-
-Candidate Skills: {resume_skills}
-JD Required Skills: {jd_skills}
-Company: {company}
-Role: {role}
-
-Provide:
-1. A match score (percentage of JD skills found in resume)
-2. Matched skills (skills present in both)
-3. Missing skills (in JD but not in resume) — rank by importance
-4. Extra skills (in resume but not in JD) — note which ones are still valuable
-5. Brief recommendations for the top 3 missing skills
-
-Return as JSON:
-{{"match_score": 76, "matched_skills": [...], "missing_skills": [...], "extra_skills": [...], "recommendations": [...]}}
-
-JSON Output:"""
-
-
-def extract_text_from_pdf(pdf_path: str | Path) -> str:
-    """Extract text from a PDF file. Returns combined text from all pages."""
-    pdf_path = Path(pdf_path)
-    text_parts = []
-    pdf = fitz.open(str(pdf_path))
-    for page in pdf:
-        text_parts.append(page.get_text("text"))
-    pdf.close()
-    return "\n".join(text_parts)
-
-
-def extract_text_from_bytes(pdf_bytes: bytes) -> str:
-    """Extract text from PDF bytes (for uploaded files)."""
-    pdf = fitz.open(stream=pdf_bytes, filetype="pdf")
-    text_parts = []
-    for page in pdf:
-        text_parts.append(page.get_text("text"))
-    pdf.close()
-    return "\n".join(text_parts)
-
-
-def extract_skills(text: str, doc_type: str = "resume") -> dict:
-    """
-    Extract skills from text using LLM.
-
-    Args:
-        text: Resume or JD text
-        doc_type: "resume" or "job description"
-
-    Returns:
-        Dict with 'skills' list and 'skill_details' list
-    """
-    llm = _get_llm()
-
-    # Truncate if too long (keep first 4000 chars for context window efficiency)
-    truncated = text[:4000] if len(text) > 4000 else text
-
-    prompt = EXTRACT_SKILLS_PROMPT.format(doc_type=doc_type, text=truncated)
-
+def _extract_text(pdf_bytes: bytes, label: str) -> str:
     try:
-        response = llm.invoke(prompt)
-        content = response.content.strip()
-
-        # Handle markdown code blocks
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1]
-            content = content.rsplit("```", 1)[0]
-
-        return json.loads(content)
+        pdf = fitz.open(stream=pdf_bytes, filetype="pdf")
+        pages = [p.get_text("text").strip() for p in pdf if p.get_text("text").strip()]
+        pdf.close()
+        text = "\n\n".join(pages)
+        logger.info(f"{label}: {len(text)} chars, {len(pages)} pages")
+        return text
     except Exception as e:
-        logger.error(f"Skill extraction failed: {e}")
-        return {"skills": [], "skill_details": []}
+        logger.error(f"PDF extract failed [{label}]: {e}")
+        return ""
 
 
-def get_jd_skills(company: str) -> dict:
-    """
-    Get required skills for a company from:
-    1. Structured store (if company info exists)
-    2. RAG retrieval from JD documents
-    """
-    # Try structured store first
-    company_info = structured_store.find_one("companies", {"company": company})
-    if company_info and company_info.get("skills"):
-        return {
-            "skills": company_info["skills"],
-            "role": company_info.get("role", "Not specified"),
-            "source": "structured_store",
-        }
+# ─────────────────────────────────────────────
+# Rule-based formatting checks (instant, no API)
+# ─────────────────────────────────────────────
 
-    # Fall back to RAG retrieval from JD chunks
-    chunks = hybrid_retrieve(
-        query=f"Required skills and qualifications for {company}",
-        company=company,
-        doc_type="job_description",
-        top_k=5,
-    )
-
-    if chunks:
-        # Extract skills from retrieved JD chunks
-        combined_text = "\n".join(c["text"] for c in chunks)
-        extracted = extract_skills(combined_text, doc_type="job description")
-        return {
-            "skills": extracted.get("skills", []),
-            "role": "Not specified",
-            "source": "rag_retrieval",
-        }
-
-    return {"skills": [], "role": "Not specified", "source": "not_found"}
+_SECTIONS = [
+    "summary", "objective", "profile", "experience", "work experience",
+    "employment", "education", "academic", "skills", "technical skills",
+    "projects", "certifications", "achievements", "awards",
+]
 
 
-def analyze_resume(
-    resume_text: str,
-    company: str,
-    resume_pdf_bytes: Optional[bytes] = None,
-) -> dict:
-    """
-    Full resume analysis pipeline.
+def _formatting_checks(text: str) -> dict:
+    low = text.lower()
+    lines = text.splitlines()
+    positives, issues = [], []
 
-    Args:
-        resume_text: Resume text (or empty if pdf_bytes provided)
-        company: Target company name
-        resume_pdf_bytes: Raw PDF bytes (if text not pre-extracted)
+    if re.search(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", text):
+        positives.append("Email address present")
+    else:
+        issues.append("No email address — ATS requires contact info")
 
-    Returns:
-        Analysis dict with match_score, matched/missing/extra skills,
-        and recommendations. Resume text is NOT persisted anywhere.
-    """
-    # Extract text from PDF bytes if needed
-    if resume_pdf_bytes and not resume_text:
-        resume_text = extract_text_from_bytes(resume_pdf_bytes)
+    if re.search(r"(\+?\d[\d\s\-().]{7,}\d)", text):
+        positives.append("Phone number present")
+    else:
+        issues.append("No phone number detected")
 
-    if not resume_text.strip():
-        return {"error": "No text could be extracted from the resume."}
+    if "linkedin.com" in low:
+        positives.append("LinkedIn URL included")
+    if "github.com" in low:
+        positives.append("GitHub URL included")
 
-    # NOTE: resume_text is only used in-memory — never logged or stored
-    logger.info(f"Analyzing resume against {company} (text length: {len(resume_text)} chars)")
+    bullets = sum(1 for l in lines if re.match(r"^[\s]*[•\-\*▪▸◦]", l))
+    if bullets >= 5:
+        positives.append("Bullet points used (ATS-friendly)")
+    elif bullets == 0:
+        issues.append("No bullet points — use bullets for experience")
 
-    # Step 1: Extract resume skills
-    resume_extracted = extract_skills(resume_text, doc_type="resume")
-    resume_skills = set(s.lower() for s in resume_extracted.get("skills", []))
+    if re.search(r"\b(19|20)\d{2}\b", text):
+        positives.append("Employment dates present")
+    else:
+        issues.append("No dates detected — add start/end dates to each role")
 
-    # Step 2: Get JD skills for the target company
-    jd_info = get_jd_skills(company)
-    jd_skills = set(s.lower() for s in jd_info.get("skills", []))
+    detected = [s.title() for s in _SECTIONS if s in low]
+    for s in ["Experience", "Education", "Skills"]:
+        if s.lower() not in low:
+            issues.append(f"Missing '{s}' section — core ATS requirement")
 
-    if not jd_skills:
-        return {
-            "error": f"No job description or skills data found for {company}. Please ingest JD documents first.",
-            "resume_skills": sorted(resume_extracted.get("skills", [])),
-        }
+    words = len(text.split())
+    if words < 300:
+        issues.append(f"Resume too short ({words} words)")
+    elif words > 2000:
+        issues.append(f"Resume very long ({words} words) — aim for 1-2 pages")
+    else:
+        positives.append(f"Good length ({words} words)")
 
-    # Step 3: Compute gap analysis
-    matched = resume_skills & jd_skills
-    missing = jd_skills - resume_skills
-    extra = resume_skills - jd_skills
-    match_score = round(len(matched) / len(jd_skills) * 100, 1) if jd_skills else 0
+    if sum(1 for l in lines if len(l) > 100) > 20:
+        issues.append("Possible multi-column layout — ATS parsers struggle with columns")
 
-    # Step 4: Get LLM-generated recommendations
-    try:
-        llm = _get_llm()
-        prompt = GAP_ANALYSIS_PROMPT.format(
-            resume_skills=sorted(resume_extracted.get("skills", [])),
-            jd_skills=sorted(jd_info.get("skills", [])),
-            company=company,
-            role=jd_info.get("role", "Not specified"),
-        )
-        response = llm.invoke(prompt)
-        content = response.content.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1]
-            content = content.rsplit("```", 1)[0]
-        llm_analysis = json.loads(content)
-        recommendations = llm_analysis.get("recommendations", [])
-    except Exception as e:
-        logger.warning(f"LLM gap analysis failed, using basic analysis: {e}")
-        recommendations = [
-            f"Study {skill} — required by {company}" for skill in sorted(missing)[:3]
-        ]
-
-    result = {
-        "company": company,
-        "role": jd_info.get("role", "Not specified"),
-        "match_score": match_score,
-        "matched_skills": sorted(s.title() for s in matched),
-        "missing_skills": sorted(s.title() for s in missing),
-        "extra_skills": sorted(s.title() for s in extra),
-        "resume_skills_count": len(resume_skills),
-        "jd_skills_count": len(jd_skills),
-        "recommendations": recommendations,
-        "jd_source": jd_info.get("source", "unknown"),
+    return {
+        "positives": positives,
+        "issues": issues,
+        "detected_sections": detected,
+        "score": max(0.0, 100.0 - len(issues) * 15),
     }
 
-    logger.info(
-        f"Resume analysis complete: match_score={match_score}%, "
-        f"matched={len(matched)}, missing={len(missing)}"
-    )
 
-    return result
+# ─────────────────────────────────────────────
+# Prompt — returns plain JSON, no schema overhead
+# ─────────────────────────────────────────────
+
+PROMPT = """\
+You are an ATS (Applicant Tracking System) expert. Analyze the resume against the job description and return a JSON object. No markdown, no explanation — raw JSON only.
+
+=== JOB DESCRIPTION ===
+{jd_text}
+
+=== RESUME ===
+{resume_text}
+
+=== PRE-COMPUTED FORMATTING (use these directly) ===
+Sections found: {sections_present}
+Formatting positives: {fmt_positives}
+Formatting issues: {fmt_issues}
+Formatting score: {fmt_score}/100
+
+Return ONLY this JSON structure (no markdown fences):
+{{
+  "company": "string",
+  "role": "string",
+  "seniority_level": "Entry|Mid|Senior|Lead|Manager",
+  "industry_domain": "string",
+  "required_experience_years": null or int,
+  "required_degree": null or "string",
+  "required_skills": ["list of hard skills explicitly required"],
+  "preferred_skills": ["list of nice-to-have skills"],
+  "jd_keywords": ["all ATS keywords including acronyms AND full forms"],
+  "ats_score": float (weighted: skills*0.35 + keywords*0.25 + experience*0.15 + education*0.10 + sections*0.10 + formatting*0.05),
+  "section_scores": {{
+    "skills_match": float,
+    "keyword_density": float,
+    "section_completeness": float,
+    "experience_alignment": float,
+    "education_match": float,
+    "formatting": float (use pre-computed formatting score above)
+  }},
+  "matched_required_skills": ["skills in both JD and resume"],
+  "missing_required_skills": ["required skills NOT in resume, ranked by importance"],
+  "matched_preferred_skills": ["preferred skills in resume"],
+  "missing_preferred_skills": ["preferred skills not in resume"],
+  "matched_keywords": ["JD keywords found in resume"],
+  "missing_keywords": ["important JD keywords missing from resume"],
+  "experience_years_detected": null or int,
+  "education_detected": null or "string",
+  "priority_recommendations": ["5-7 specific actionable fixes, ordered by impact"],
+  "strengths": ["3-4 genuine strengths for this specific JD"],
+  "overall_verdict": "2-3 honest sentences about ATS pass likelihood and biggest gap"
+}}"""
+
+
+# ─────────────────────────────────────────────
+# Main public function
+# ─────────────────────────────────────────────
+
+def analyze_resume(resume_pdf_bytes: bytes, jd_pdf_bytes: bytes) -> dict:
+    """
+    ATS resume analysis — single fast Gemini call with plain JSON output.
+
+    1. Extract text from both PDFs (fitz, in-memory, instant)
+    2. Rule-based formatting checks (instant regex)
+    3. One Gemini call → plain JSON (faster than structured_output)
+    4. Parse + return
+    """
+    import time
+    t0 = time.time()
+
+    resume_text = _extract_text(resume_pdf_bytes, "Resume")
+    jd_text = _extract_text(jd_pdf_bytes, "JD")
+
+    if not resume_text.strip():
+        return {"error": "Could not extract text from resume PDF. Make sure it is not a scanned image."}
+    if not jd_text.strip():
+        return {"error": "Could not extract text from JD PDF. Make sure it is not a scanned image."}
+
+    fmt = _formatting_checks(resume_text)
+    logger.info(f"Formatting done in {time.time()-t0:.1f}s: score={fmt['score']}, issues={len(fmt['issues'])}")
+
+    try:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        os.environ.setdefault("GOOGLE_API_KEY", settings.google_api_key)
+
+        # Use a fast lite model for extraction (settings.llm_extraction_model).
+        # Thinking models (gemini-2.5-flash / flash-latest) spend 30-50s on internal
+        # reasoning for this mechanical JSON task and hit 504 DEADLINE_EXCEEDED;
+        # a lite model returns the same JSON in ~2s.
+        llm = ChatGoogleGenerativeAI(
+            model=settings.llm_extraction_model,
+            temperature=0.0,  # deterministic = faster, no sampling overhead
+            max_retries=0,
+            timeout=45,
+        )
+
+        prompt = PROMPT.format(
+            jd_text=jd_text[:3500],
+            resume_text=resume_text[:3500],
+            sections_present=", ".join(fmt["detected_sections"]) or "None detected",
+            fmt_positives="; ".join(fmt["positives"]) or "None",
+            fmt_issues="; ".join(fmt["issues"]) or "None",
+            fmt_score=int(fmt["score"]),
+        )
+
+        t1 = time.time()
+        logger.info(f"Sending ATS prompt to {settings.llm_model}...")
+        response = llm.invoke(prompt)
+        logger.info(f"Gemini responded in {time.time()-t1:.1f}s")
+
+        # response.content may be a plain string OR a list of content blocks
+        # (thinking-model shape: [{"type": "text", "text": "..."}]). Normalize.
+        raw = response.content
+        if isinstance(raw, list):
+            raw = "".join(
+                part.get("text", "") if isinstance(part, dict) else str(part)
+                for part in raw
+            )
+        content = (raw or "").strip()
+
+        # Strip markdown fences if Gemini adds them despite instructions
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1]
+            content = content.rsplit("```", 1)[0].strip()
+
+        report = json.loads(content)
+
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON parse failed: {e}\nRaw: {content[:300]}")
+        return {"error": "ATS analysis returned malformed data. Please try again."}
+    except Exception as e:
+        msg = str(e)
+        logger.error(f"ATS analysis failed: {msg}")
+        # Gemini free-tier quota exhaustion — give the user an actionable message
+        # instead of a raw 429 dump.
+        if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+            return {"error": "The AI service is rate-limited right now (free-tier quota). Please wait about a minute and try again."}
+        return {"error": "ATS analysis failed. Please try again in a moment."}
+
+    logger.info(f"Total analysis time: {time.time()-t0:.1f}s")
+
+    # Normalize: ensure all expected keys exist with safe defaults.
+    # These coercers are defensive — the LLM occasionally returns a value in the
+    # wrong type (e.g. "85%" or "high"), which must not 500 the whole request.
+    def _lst(key):
+        v = report.get(key)
+        return v if isinstance(v, list) else []
+
+    def _flt(key):
+        try:
+            return float(report.get(key))
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _num(v):  # safe float for nested section_scores values
+        try:
+            return round(float(v), 1)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _int(key):
+        v = report.get(key)
+        try:
+            return int(v)  # note: 0 is a valid value and must be preserved
+        except (TypeError, ValueError):
+            return None
+
+    def _str(key, default=""):
+        v = report.get(key)
+        return str(v) if v not in (None, "") else default
+
+    ss = report.get("section_scores")
+    if not isinstance(ss, dict):
+        ss = {}
+
+    return {
+        "company":                   _str("company", "Unknown"),
+        "role":                      _str("role", "Unknown Role"),
+        "seniority_level":           _str("seniority_level", "Mid"),
+        "industry_domain":           _str("industry_domain", "Software"),
+        "required_experience_years": _int("required_experience_years"),
+        "required_degree":           report.get("required_degree"),
+        "ats_score":                 round(_flt("ats_score"), 1),
+        "section_scores": {
+            "skills_match":         _num(ss.get("skills_match")),
+            "keyword_density":      _num(ss.get("keyword_density")),
+            "section_completeness": _num(ss.get("section_completeness")),
+            "experience_alignment": _num(ss.get("experience_alignment")),
+            "education_match":      _num(ss.get("education_match")),
+            "formatting":           _num(ss.get("formatting") or fmt["score"]),
+        },
+        "matched_required_skills":   _lst("matched_required_skills"),
+        "missing_required_skills":   _lst("missing_required_skills"),
+        "matched_preferred_skills":  _lst("matched_preferred_skills"),
+        "missing_preferred_skills":  _lst("missing_preferred_skills"),
+        "matched_keywords":          _lst("matched_keywords"),
+        "missing_keywords":          _lst("missing_keywords"),
+        "experience_years_detected": _int("experience_years_detected"),
+        "education_detected":        report.get("education_detected"),
+        "formatting_issues":         fmt["issues"],    # always use rule-based
+        "formatting_positives":      fmt["positives"],
+        "priority_recommendations":  _lst("priority_recommendations"),
+        "strengths":                 _lst("strengths"),
+        "overall_verdict":           _str("overall_verdict", "Analysis complete."),
+        "total_required_skills":     len(_lst("required_skills")),
+        "total_keywords":            len(_lst("jd_keywords")),
+    }

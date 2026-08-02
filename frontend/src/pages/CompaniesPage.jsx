@@ -1,77 +1,182 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Building2, ArrowRight } from 'lucide-react';
+import { useState } from 'react';
+import {
+  Building2,
+  Search,
+  Loader2,
+  ThumbsUp,
+  ThumbsDown,
+  IndianRupee,
+  Scale,
+  Link as LinkIcon,
+  FileText,
+} from 'lucide-react';
 import api from '../services/api';
 
+// Quick-pick chips so the user isn't staring at an empty box
+const SUGGESTIONS = ['Amazon', 'TCS', 'Infosys', 'Google', 'Deloitte', 'Accenture'];
+
 export default function CompaniesPage() {
-  const [companies, setCompanies] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+  const [input, setInput] = useState('');
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    api.getCompanies().then(data => {
-      setCompanies(data.companies || []);
-    }).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+  async function runSearch(name) {
+    const company = (name ?? input).trim();
+    if (!company || loading) return;
 
-  if (loading) {
-    return (
-      <>
-        <div className="page-header">
-          <h1 className="page-title">Companies</h1>
-        </div>
-        <div className="page-body">
-          <div className="loading-spinner"><div className="spinner"></div></div>
-        </div>
-      </>
-    );
+    setInput(company);
+    setLoading(true);
+    setError('');
+    setReport(null);
+
+    try {
+      const data = await api.getCompanyAbout(company);
+      setReport(data);
+    } catch (err) {
+      setError(err.message || 'Could not research that company.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    runSearch();
   }
 
   return (
     <>
       <div className="page-header">
-        <h1 className="page-title">Companies</h1>
-        <p className="page-subtitle">Browse interview experiences and job descriptions by company</p>
+        <h1 className="page-title">About the Company</h1>
+        <p className="page-subtitle">
+          Search any company for a fact-checked breakdown — pros, cons, pay and
+          work-life balance, backed by real web sources.
+        </p>
       </div>
 
       <div className="page-body">
-        {companies.length === 0 ? (
-          <div className="empty-state">
-            <Building2 size={64} />
-            <h3 className="empty-state-title">No companies yet</h3>
-            <p className="empty-state-text">
-              Upload interview experience and JD documents in the Admin page to get started.
-            </p>
-          </div>
-        ) : (
-          <div className="companies-grid">
-            {companies.map((c, i) => (
-              <div
-                key={i}
-                className="company-card"
-                onClick={() => navigate(`/companies/${c.company}`)}
-              >
-                <div className="company-name">{c.company}</div>
-                <div className="company-role">{c.role}</div>
-                {c.package !== 'Not mentioned' && (
-                  <div className="company-package">{c.package}</div>
-                )}
-                {c.skills?.length > 0 && (
-                  <div className="company-skills">
-                    {c.skills.slice(0, 6).map((skill, j) => (
-                      <span key={j} className="skill-tag">{skill}</span>
-                    ))}
-                    {c.skills.length > 6 && (
-                      <span className="skill-tag">+{c.skills.length - 6}</span>
-                    )}
-                  </div>
-                )}
-                <div className="company-meta">
-                  <span>{c.total_questions || 0} questions</span>
-                  {c.rounds?.length > 0 && <span>{c.rounds.length} rounds</span>}
-                </div>
-              </div>
+        {/* Search bar */}
+        <form onSubmit={handleSubmit} className="about-search">
+          <Search size={18} className="about-search-icon" />
+          <input
+            className="about-search-input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type a company name — e.g. Amazon, TCS, Google..."
+            autoFocus
+          />
+          <button type="submit" className="btn btn-primary" disabled={!input.trim() || loading}>
+            {loading ? <Loader2 size={16} className="about-spin" /> : 'Research'}
+          </button>
+        </form>
+
+        {/* Suggestion chips */}
+        {!report && !loading && (
+          <div className="about-suggestions">
+            {SUGGESTIONS.map((s) => (
+              <button key={s} className="about-chip" onClick={() => runSearch(s)}>
+                <Building2 size={14} />
+                {s}
+              </button>
             ))}
+          </div>
+        )}
+
+        {/* Loading */}
+        {loading && (
+          <div className="about-loading">
+            <Loader2 size={40} className="about-spin" />
+            <p>Researching <strong>{input}</strong> across reviews, salary reports and recent news…</p>
+            <span className="about-loading-hint">Reading real sources takes ~20 seconds — hang tight.</span>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && !loading && (
+          <div className="about-error">
+            <Building2 size={40} />
+            <h3>Couldn't research that</h3>
+            <p>{error}</p>
+          </div>
+        )}
+
+        {/* Report */}
+        {report && !loading && (
+          <div className="about-report">
+            <div className="about-company-name">{report.company}</div>
+
+            {/* Overview */}
+            <section className="about-section">
+              <h2 className="about-section-title">Overview</h2>
+              <p className="about-overview">{report.overview}</p>
+            </section>
+
+            {/* Pros / Cons side by side */}
+            <div className="about-proscons">
+              <section className="about-section about-pros">
+                <h2 className="about-section-title">
+                  <ThumbsUp size={18} /> Pros
+                </h2>
+                <ul className="about-list">
+                  {report.pros?.length
+                    ? report.pros.map((p, i) => <li key={i}>{p}</li>)
+                    : <li className="about-empty">No pros found.</li>}
+                </ul>
+              </section>
+
+              <section className="about-section about-cons">
+                <h2 className="about-section-title">
+                  <ThumbsDown size={18} /> Cons
+                </h2>
+                <ul className="about-list">
+                  {report.cons?.length
+                    ? report.cons.map((c, i) => <li key={i}>{c}</li>)
+                    : <li className="about-empty">No cons found.</li>}
+                </ul>
+              </section>
+            </div>
+
+            {/* Salaries */}
+            <section className="about-section">
+              <h2 className="about-section-title">
+                <IndianRupee size={18} /> Salaries
+              </h2>
+              <ul className="about-list">
+                {report.salaries?.length
+                  ? report.salaries.map((s, i) => <li key={i}>{s}</li>)
+                  : <li className="about-empty">No salary data found.</li>}
+              </ul>
+            </section>
+
+            {/* Work-life balance */}
+            <section className="about-section">
+              <h2 className="about-section-title">
+                <Scale size={18} /> Work-life balance
+              </h2>
+              <p className="about-overview">{report.work_life_balance}</p>
+            </section>
+
+            {/* Sources */}
+            <section className="about-section">
+              <h2 className="about-section-title">
+                <LinkIcon size={18} /> Sources
+              </h2>
+              {report.sources?.length ? (
+                <ul className="about-sources">
+                  {report.sources.map((src, i) => (
+                    <li key={i}>
+                      <a href={src.url} target="_blank" rel="noopener noreferrer">
+                        <FileText size={14} />
+                        <span>{src.title}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="about-empty">No sources returned.</p>
+              )}
+            </section>
           </div>
         )}
       </div>

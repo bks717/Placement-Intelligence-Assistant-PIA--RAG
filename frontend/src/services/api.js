@@ -77,12 +77,19 @@ class APIService {
     return this.request(`/companies/${encodeURIComponent(name)}`);
   }
 
-  // Resume
-  async analyzeResume(company, resumeFile = null, resumeText = '') {
+  // About the Company — grounded web report (overview/pros/cons/salaries/WLB/sources)
+  async getCompanyAbout(company) {
+    return this.request('/company/about', {
+      method: 'POST',
+      body: JSON.stringify({ company }),
+    });
+  }
+
+  // Resume — ATS analysis: requires both resume PDF and JD PDF
+  async analyzeResume(resumeFile, jdFile) {
     const formData = new FormData();
-    formData.append('company', company);
-    if (resumeFile) formData.append('resume_file', resumeFile);
-    if (resumeText) formData.append('resume_text', resumeText);
+    formData.append('resume_file', resumeFile);
+    formData.append('jd_file', jdFile);
 
     return this.request('/resume/analyze', {
       method: 'POST',

@@ -24,7 +24,8 @@ rank-bm25>=0.2.2
 pymupdf>=1.25.0
 
 # MongoDB (optional - falls back to JSON store)
-pymongo>=4.10.0
+# [srv] extra pulls in dnspython, required for mongodb+srv:// Atlas URIs
+pymongo[srv]>=4.10.0
 
 # Evaluation (optional — install separately if needed)
 # pip install ragas datasets

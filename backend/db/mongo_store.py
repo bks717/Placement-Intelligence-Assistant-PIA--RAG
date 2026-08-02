@@ -2,7 +2,8 @@
 Structured Data Store
 
 Stores structured/queryable facts (companies, interview questions, skills)
-that don't need embedding search. Supports MongoDB or JSON-file fallback.
+that don't need embedding search. Uses MongoDB when USE_MONGODB=true and the
+cluster is reachable, otherwise falls back to a JSON-file store.
 
 Why separate from vector DB: structured queries like "all SQL-tagged questions
 for ProcDNA" are better served by a queryable store than by semantic search.
@@ -194,23 +195,126 @@ class JSONStore:
         return stats
 
 
-def get_structured_store() -> JSONStore:
+class MongoStore:
+    """
+    MongoDB-backed structured store. Implements the same interface as
+    JSONStore so the rest of the app is storage-agnostic.
+
+    Documents use a string uuid `_id` (not ObjectId) so every document
+    returned from a query is JSON-serializable and can be handed straight
+    to FastAPI/Pydantic without conversion.
+    """
+
+    def __init__(self, uri: str, db_name: str):
+        from pymongo import MongoClient
+
+        self._client = MongoClient(uri, serverSelectionTimeoutMS=8000)
+        # Fail fast if the cluster is unreachable — surfaces to the factory
+        # which then falls back to JSONStore.
+        self._client.admin.command("ping")
+        self._db = self._client[db_name]
+        logger.info(f"MongoStore connected: db='{db_name}'")
+
+    def _col(self, collection: str):
+        return self._db[collection]
+
+    def insert(self, collection: str, document: dict) -> str:
+        """Insert a document into a collection. Returns the document ID."""
+        if "_id" not in document:
+            document["_id"] = str(uuid.uuid4())
+        self._col(collection).insert_one(document)
+        return document["_id"]
+
+    def insert_many(self, collection: str, documents: list[dict]) -> list[str]:
+        """Insert multiple documents. Returns list of IDs."""
+        if not documents:
+            return []
+        for doc in documents:
+            if "_id" not in doc:
+                doc["_id"] = str(uuid.uuid4())
+        self._col(collection).insert_many(documents)
+        return [doc["_id"] for doc in documents]
+
+    def find(
+        self,
+        collection: str,
+        query: Optional[dict] = None,
+        limit: Optional[int] = None,
+    ) -> list[dict]:
+        """Find documents matching a query dict (AND logic)."""
+        cursor = self._col(collection).find(query or {})
+        if limit:
+            cursor = cursor.limit(limit)
+        return list(cursor)
+
+    def find_one(self, collection: str, query: dict) -> Optional[dict]:
+        """Find a single matching document."""
+        return self._col(collection).find_one(query)
+
+    def update(self, collection: str, query: dict, update_fields: dict) -> int:
+        """Update all matching documents. Returns count of updated docs."""
+        result = self._col(collection).update_many(query, {"$set": update_fields})
+        return result.modified_count
+
+    def delete(self, collection: str, query: dict) -> int:
+        """Delete all matching documents. Returns count of deleted docs."""
+        result = self._col(collection).delete_many(query)
+        return result.deleted_count
+
+    def count(self, collection: str, query: Optional[dict] = None) -> int:
+        """Count documents matching a query."""
+        return self._col(collection).count_documents(query or {})
+
+    def distinct(self, collection: str, field: str) -> list:
+        """
+        Get distinct values for a field across all documents.
+        Mongo flattens array-valued fields automatically.
+        """
+        return sorted(v for v in self._col(collection).distinct(field) if v is not None)
+
+    def aggregate_field(
+        self, collection: str, group_field: str, count_field: Optional[str] = None
+    ) -> dict:
+        """Group by a field and count occurrences (array values are unwound)."""
+        pipeline = [
+            {"$unwind": {"path": f"${group_field}", "preserveNullAndEmptyArrays": True}},
+            {"$group": {"_id": {"$ifNull": [f"${group_field}", "unknown"]}, "n": {"$sum": 1}}},
+        ]
+        return {doc["_id"]: doc["n"] for doc in self._col(collection).aggregate(pipeline)}
+
+    def drop_collection(self, collection: str):
+        """Delete an entire collection."""
+        self._db.drop_collection(collection)
+        logger.warning(f"Dropped collection: {collection}")
+
+    def list_collections(self) -> list[str]:
+        """List all collection names."""
+        return self._db.list_collection_names()
+
+    def get_stats(self) -> dict:
+        """Get store statistics."""
+        return {col: self.count(col) for col in self.list_collections()}
+
+
+def get_structured_store():
     """
     Factory function — returns the appropriate structured store.
-    Currently returns JSONStore. Can be extended to return MongoStore
-    when settings.use_mongodb is True.
+
+    Returns MongoStore when USE_MONGODB is true and the cluster is reachable;
+    otherwise falls back to the file-based JSONStore so local dev and demos
+    never hard-break on a bad/missing connection.
     """
     if settings.use_mongodb:
         try:
-            from pymongo import MongoClient
-            # If MongoDB support is needed in the future, implement MongoStore
-            # with the same interface as JSONStore
-            logger.warning(
-                "MongoDB selected but MongoStore not yet implemented. "
-                "Falling back to JSONStore."
-            )
+            store = MongoStore(settings.mongodb_uri, settings.mongodb_db_name)
+            logger.info("Using MongoStore for structured data.")
+            return store
         except ImportError:
-            logger.warning("pymongo not installed. Using JSONStore fallback.")
+            logger.warning("pymongo not installed. Falling back to JSONStore.")
+        except Exception as e:
+            logger.warning(
+                f"MongoDB connection failed ({e}). Falling back to JSONStore."
+            )
 
     return JSONStore()
 

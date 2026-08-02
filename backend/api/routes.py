@@ -21,6 +21,7 @@ from backend.api.schemas import (
     QueryRequest, QueryResponse,
     IngestResponse,
     CompanyInfo, CompanyListResponse,
+    CompanyAboutRequest, CompanyAboutResponse,
     ResumeAnalyzeResponse,
     EvalRunRequest, EvalResultsResponse,
     StatsResponse,
@@ -224,43 +225,67 @@ async def get_company_detail(name: str):
 
 
 # ============================================================
+# About the Company (Google-Search-grounded report)
+# ============================================================
+
+@router.post("/company/about", response_model=CompanyAboutResponse)
+async def company_about_endpoint(request: CompanyAboutRequest):
+    """
+    Grounded company dossier: overview, pros, cons, salaries, work-life balance,
+    all backed by real web sources (profile, annual reports, careers page,
+    employee reviews, salary reports, news).
+    """
+    from backend.rag.company_report import generate_company_report
+
+    result = generate_company_report(request.company)
+
+    if "error" in result:
+        raise HTTPException(status_code=422, detail=result["error"])
+
+    return CompanyAboutResponse(**result)
+
+
+# ============================================================
 # Resume Analyzer
 # ============================================================
 
 @router.post("/resume/analyze", response_model=ResumeAnalyzeResponse)
 async def analyze_resume_endpoint(
-    company: str = Form(...),
-    resume_file: UploadFile = File(None),
-    resume_text: str = Form(default=""),
+    resume_file: UploadFile = File(...),
+    jd_file: UploadFile = File(...),
 ):
     """
-    Analyze a resume against a company's JD.
-    Upload a PDF or provide text directly.
-    Resume content is processed in-memory only — never persisted.
+    ATS-style resume analysis.
+
+    Accepts two PDF uploads:
+      - resume_file: the candidate's resume
+      - jd_file:     the target job description
+
+    All JD details (company, role, skills, keywords) are extracted directly
+    from the uploaded JD PDF — no company selection needed.
+    Both files are processed in-memory and never persisted.
     """
-    text = resume_text
-    pdf_bytes = None
+    if not resume_file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="resume_file must be a PDF")
+    if not jd_file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="jd_file must be a PDF")
 
-    if resume_file and resume_file.filename:
-        if not resume_file.filename.lower().endswith(".pdf"):
-            raise HTTPException(status_code=400, detail="Only PDF files are supported")
-        pdf_bytes = await resume_file.read()
+    resume_bytes = await resume_file.read()
+    jd_bytes = await jd_file.read()
 
-    if not text and not pdf_bytes:
-        raise HTTPException(
-            status_code=400,
-            detail="Provide either resume_text or upload a resume_file",
-        )
+    if not resume_bytes:
+        raise HTTPException(status_code=400, detail="resume_file is empty")
+    if not jd_bytes:
+        raise HTTPException(status_code=400, detail="jd_file is empty")
 
     try:
         result = analyze_resume(
-            resume_text=text,
-            company=company,
-            resume_pdf_bytes=pdf_bytes,
+            resume_pdf_bytes=resume_bytes,
+            jd_pdf_bytes=jd_bytes,
         )
 
-        if "error" in result and not result.get("match_score"):
-            raise HTTPException(status_code=400, detail=result["error"])
+        if "error" in result:
+            raise HTTPException(status_code=422, detail=result["error"])
 
         return ResumeAnalyzeResponse(**result)
     except HTTPException:
