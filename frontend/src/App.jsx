@@ -7,6 +7,7 @@ import QueryPage from './pages/QueryPage';
 import CompaniesPage from './pages/CompaniesPage';
 import CompanyDetailPage from './pages/CompanyDetailPage';
 import FastPrepPage from './pages/FastPrepPage';
+import HrQuestionsPage from './pages/HrQuestionsPage';
 import ResumePage from './pages/ResumePage';
 import EvalPage from './pages/EvalPage';
 import AdminPage from './pages/AdminPage';
@@ -43,6 +44,7 @@ export default function App() {
             <Route path="/companies" element={<CompaniesPage />} />
             <Route path="/companies/:name" element={<CompanyDetailPage />} />
             <Route path="/fast-prep" element={<FastPrepPage />} />
+            <Route path="/hr-questions" element={<HrQuestionsPage />} />
             <Route path="/resume" element={<ResumePage />} />
             <Route path="/eval" element={<EvalPage />} />
             <Route path="/admin" element={<AdminPage />} />

@@ -111,6 +111,15 @@ class APIService {
     });
   }
 
+  // Fast Prep — web-grounded Top Asked questions (DSA + core), lazy-loaded
+  async getTopAsked({ company, role = '' }) {
+    return this.request('/fast-prep/questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ company, role }),
+    });
+  }
+
   // Evaluation
   async runEval(modes = ['dense_only', 'hybrid', 'hybrid_reranked'], includeFaithfulness = false) {
     return this.request('/eval/run', {

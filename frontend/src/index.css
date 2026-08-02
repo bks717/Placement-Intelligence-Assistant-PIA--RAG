@@ -2007,6 +2007,207 @@ body::before {
   gap: 4px;
 }
 
+/* Top Asked — web-grounded two-column questions */
+.fp-top-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.fp-top-loading p {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.fp-top-loading span {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.fp-top-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-glass);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.fp-top-note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.fp-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.fp-cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fp-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fp-col-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.fp-tq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fp-tq {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.fp-tq-diff {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 6px;
+}
+
+.fp-tq-subject {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  margin-top: 1px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary);
+  background: var(--bg-glass-hover);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+}
+
+.fp-tq-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.fp-tq-text {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+
+.fp-tq-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fp-tq-tag {
+  padding: 1px 8px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  background: var(--bg-glass);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+}
+
+.fp-tq-topic {
+  color: var(--text-secondary);
+}
+
+/* HR column — Top 10 / 50 / 100 switcher */
+.fp-hr-views {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.fp-hr-view {
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-glass);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.fp-hr-view:hover {
+  background: var(--bg-glass-hover);
+  border-color: var(--border-hover);
+}
+
+.fp-hr-view-active {
+  color: var(--text-primary);
+  background: var(--bg-glass-hover);
+  border-color: var(--border-hover);
+}
+
+/* Numbered rank badge (HR rows) */
+.fp-tq-rank {
+  flex-shrink: 0;
+  min-width: 20px;
+  padding: 1px 6px;
+  margin-top: 1px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--bg-glass-hover);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+}
+
+/* Per-column empty state */
+.fp-col-empty {
+  padding: 16px 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+  background: var(--bg-glass);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.fp-top-retry {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
 @media (max-width: 768px) {
   .fp-form-row {
     grid-template-columns: 1fr;
@@ -2018,6 +2219,10 @@ body::before {
     justify-content: flex-start;
     border-right: none;
     border-bottom: 1px solid var(--border-color);
+  }
+  .fp-cols,
+  .fp-cols-3 {
+    grid-template-columns: 1fr;
   }
 }
 

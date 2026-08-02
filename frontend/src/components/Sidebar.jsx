@@ -4,6 +4,7 @@ import {
   MessageSquare,
   Building2,
   Zap,
+  Users,
   FileText,
   Settings,
   BarChart3,
@@ -44,6 +45,10 @@ export default function Sidebar({ isCollapsed, onToggle }) {
         <NavLink to="/fast-prep" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
           <Zap size={18} />
           <span className="nav-link-text">Fast Prep</span>
+        </NavLink>
+        <NavLink to="/hr-questions" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <Users size={18} />
+          <span className="nav-link-text">HR Qss</span>
         </NavLink>
 
         <div className="nav-section-label">Tools</div>

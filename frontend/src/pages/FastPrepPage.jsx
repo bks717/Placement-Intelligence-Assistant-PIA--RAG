@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import {
   Zap, Loader2, Upload, FileText, Building2, CalendarDays,
   Flame, ClipboardList, ExternalLink, BookOpen, Code2, Info,
-  ChevronRight, Gauge,
+  ChevronRight, Gauge, Link2, Braces, Layers,
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -37,6 +37,10 @@ export default function FastPrepPage() {
   const [error, setError] = useState('');
   const [plan, setPlan] = useState(null);
   const [tab, setTab] = useState('plan'); // 'plan' | 'questions'
+  const [topAsked, setTopAsked] = useState(null);
+  const [topLoading, setTopLoading] = useState(false);
+  const [topError, setTopError] = useState('');
+  const [topTried, setTopTried] = useState(false);
   const fileRef = useRef(null);
 
   async function handleSubmit(e) {
@@ -65,9 +69,39 @@ export default function FastPrepPage() {
     }
   }
 
+  async function loadTopAsked(force = false) {
+    if (!plan || topLoading) return;
+    if (!force && (topAsked || topTried)) return;
+    if (!plan.company || plan.company === 'Your target') {
+      setTopAsked({ dsa_questions: [], core_questions: [], sources: [], empty: true });
+      setTopTried(true);
+      return;
+    }
+    setTopLoading(true);
+    setTopError('');
+    try {
+      const data = await api.getTopAsked({ company: plan.company, role: plan.role });
+      setTopAsked(data);
+    } catch (err) {
+      setTopError(err.message || 'Could not load questions.');
+      setTopAsked(null);
+    } finally {
+      setTopLoading(false);
+      setTopTried(true);
+    }
+  }
+
+  function handleTab(next) {
+    setTab(next);
+    if (next === 'questions') loadTopAsked();
+  }
+
   function reset() {
     setPlan(null);
     setError('');
+    setTopAsked(null);
+    setTopError('');
+    setTopTried(false);
   }
 
   return (
@@ -222,7 +256,7 @@ export default function FastPrepPage() {
               </button>
               <button
                 className={`fp-tab ${tab === 'questions' ? 'fp-tab-active' : ''}`}
-                onClick={() => setTab('questions')}
+                onClick={() => handleTab('questions')}
               >
                 <Flame size={15} /> Top Asked
                 {plan.interview_questions?.length > 0 && (
@@ -332,29 +366,106 @@ export default function FastPrepPage() {
             {/* ── Top Asked tab ── */}
             {tab === 'questions' && (
               <div className="fp-tabpanel">
-                {plan.interview_questions?.length > 0 ? (
-                  <div className="fp-questions">
-                    {plan.interview_questions.map((q, i) => (
-                      <div key={i} className="fp-question">
-                        <div className="fp-q-rank">#{i + 1}</div>
-                        <div className="fp-q-body">
-                          <div className="fp-q-text">{q.question}</div>
-                          <div className="fp-q-meta">
-                            <span className="fp-q-freq"><Flame size={12} /> asked in {q.asked_in} {q.asked_in === 1 ? 'write-up' : 'write-ups'}</span>
-                            <span className="fp-q-round">{q.round}</span>
-                            {q.source?.file && (
-                              <span className="fp-q-src"><FileText size={11} /> {q.source.file} · p{q.source.page}</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                {topLoading ? (
+                  <div className="fp-top-loading">
+                    <Loader2 size={36} className="about-spin" />
+                    <p>Researching what <strong>{plan.company}</strong> actually asks…</p>
+                    <span>Pulling from GeeksforGeeks, Glassdoor, LeetCode Discuss, AmbitionBox and experience blogs.</span>
                   </div>
                 ) : (
-                  <div className="fp-empty">
-                    <Flame size={40} />
-                    <h3>No past questions yet</h3>
-                    <p>We don't have ingested interview write-ups for this company. Follow the Study Plan tab meanwhile.</p>
+                  <div className="fp-top">
+                    {(topAsked?.dsa_questions?.length > 0 || topAsked?.core_questions?.length > 0) && (
+                      <div className="fp-top-note">
+                        <Info size={14} />
+                        <span>
+                          Real questions from {plan.company} interviews, pulled from the web — SDE/software-technical only.
+                          {topAsked.note ? ` ${topAsked.note}` : ''}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="fp-cols">
+                      {/* DSA column */}
+                      <div className="fp-col">
+                        <h3 className="fp-col-title"><Braces size={15} /> DSA Questions</h3>
+                        {topAsked?.dsa_questions?.length > 0 ? (
+                          <div className="fp-tq-list">
+                            {topAsked.dsa_questions.map((q, i) => (
+                              <div key={i} className="fp-tq">
+                                <span
+                                  className="fp-tq-diff"
+                                  style={{ background: DIFF_COLOR[q.difficulty] || 'var(--text-muted)' }}
+                                  title={q.difficulty}
+                                />
+                                <div className="fp-tq-body">
+                                  <div className="fp-tq-text">{q.question}</div>
+                                  {(q.difficulty || q.topic) && (
+                                    <div className="fp-tq-meta">
+                                      {q.difficulty && <span className="fp-tq-tag">{q.difficulty}</span>}
+                                      {q.topic && <span className="fp-tq-tag fp-tq-topic">{q.topic}</span>}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="fp-col-empty">No results found.</div>
+                        )}
+                      </div>
+
+                      {/* Core column */}
+                      <div className="fp-col">
+                        <h3 className="fp-col-title"><Layers size={15} /> Core & System Design</h3>
+                        {topAsked?.core_questions?.length > 0 ? (
+                          <div className="fp-tq-list">
+                            {topAsked.core_questions.map((q, i) => (
+                              <div key={i} className="fp-tq">
+                                <span className="fp-tq-subject">{q.subject}</span>
+                                <div className="fp-tq-body">
+                                  <div className="fp-tq-text">{q.question}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="fp-col-empty">No results found.</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Sources */}
+                    {topAsked?.sources?.length > 0 && (
+                      <section className="fp-section">
+                        <h3 className="fp-section-title">
+                          <Link2 size={16} /> Sources
+                          <span className="fp-section-count">
+                            where these were picked up from
+                          </span>
+                        </h3>
+                        <ul className="about-sources">
+                          {topAsked.sources.map((src, i) => (
+                            <li key={i}>
+                              <a href={src.url} target="_blank" rel="noopener noreferrer">
+                                <FileText size={14} />
+                                <span>{src.title}</span>
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    )}
+
+                    {topError && (
+                      <div className="fp-top-retry">
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => { setTopAsked(null); setTopTried(false); loadTopAsked(true); }}
+                        >
+                          Retry web research
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

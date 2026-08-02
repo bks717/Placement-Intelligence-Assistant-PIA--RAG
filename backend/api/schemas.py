@@ -273,6 +273,42 @@ class FastPrepResponse(BaseModel):
 
 
 # ============================================================
+# Top Asked — web-grounded questions (two columns)
+# ============================================================
+
+class TopDSAQuestion(BaseModel):
+    """A web-grounded DSA/coding question asked at the company."""
+    question: str
+    difficulty: str = "Medium"
+    topic: str = ""
+
+
+class TopCoreQuestion(BaseModel):
+    """A web-grounded core-subject conceptual question asked at the company."""
+    question: str
+    subject: str = "Core"
+
+
+class TopAskedResponse(BaseModel):
+    """
+    Web-grounded SDE interview questions for a company, split into DSA and
+    core-subject columns, each backed by real web sources.
+    """
+    company: str
+    role: str = ""
+    dsa_questions: list[TopDSAQuestion] = []
+    core_questions: list[TopCoreQuestion] = []
+    sources: list[CompanySource] = []
+    note: str = ""
+
+
+class TopAskedRequest(BaseModel):
+    """Request body for the grounded Top Asked questions."""
+    company: str = Field(..., min_length=1, max_length=120, description="Company name")
+    role: str = Field("", max_length=120, description="Optional role for context")
+
+
+# ============================================================
 # General
 # ============================================================
 

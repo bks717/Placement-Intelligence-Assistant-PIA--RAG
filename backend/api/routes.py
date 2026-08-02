@@ -24,6 +24,7 @@ from backend.api.schemas import (
     CompanyAboutRequest, CompanyAboutResponse,
     ResumeAnalyzeResponse,
     FastPrepResponse,
+    TopAskedRequest, TopAskedResponse,
     EvalRunRequest, EvalResultsResponse,
     StatsResponse,
 )
@@ -349,6 +350,26 @@ async def fast_prep_endpoint(
     except Exception as e:
         logger.error(f"Fast Prep failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/fast-prep/questions", response_model=TopAskedResponse)
+async def fast_prep_questions_endpoint(request: TopAskedRequest):
+    """
+    Web-grounded 'Top Asked' interview questions for a company, split into DSA and
+    core-subject columns. SDE/software-technical only — no HR/behavioural. Every
+    question is backed by real web sources (GeeksforGeeks, Glassdoor, LeetCode
+    Discuss, AmbitionBox, InterviewBit, experience blogs).
+
+    Loaded lazily by the Top Asked tab so the study plan stays fast.
+    """
+    from backend.rag.interview_questions import fetch_interview_questions
+
+    result = fetch_interview_questions(request.company, request.role)
+
+    if "error" in result:
+        raise HTTPException(status_code=422, detail=result["error"])
+
+    return TopAskedResponse(**result)
 
 
 # ============================================================
