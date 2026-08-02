@@ -1,17 +1,22 @@
 """
-Company Report — Google-Search-grounded overview.
+Company Report — Google-Search-grounded overview (India-first).
 
 "About the Company" feature. Uses Gemini with Google Search grounding so every
-claim (pros, cons, salaries, work-life balance) is backed by real web sources:
-company profile, annual reports, careers page, employee reviews, salary reports,
-recent news. Source titles + URLs come straight from grounding_metadata.
+claim (pros, cons, salaries, work-life balance) is backed by real web
+sources: company profile, annual reports, careers page, employee reviews, salary
+reports, recent news. Source titles + URLs come straight from grounding_metadata.
+
+INDIA-FIRST by design: the reader is an Indian student who will interview and be
+placed in India, so the report prioritizes the company's India operations, Indian
+employee reviews, India news, and salary figures in INR (₹). Global vs India
+experiences often differ — both are surfaced when they diverge.
 
 Why not the ChromaDB RAG pipeline? The ingested corpus only contains
 interview-experience/JD PDFs — no employee reviews, salary reports or news.
 Grounding IS RAG (live web retrieval + generation), just with a bigger corpus.
 
-Uses the lite extraction model pattern from resume/analyzer.py: thinking models
-burn 30-50s on mechanical JSON tasks and hit 504 — a lite model returns in ~3s.
+Model note: grounding needs a FULL model (lite = instant 429 on free tier);
+thinking_budget=512 keeps it at ~10-24s instead of ~32s uncapped.
 """
 
 import json
@@ -27,23 +32,31 @@ from backend.config import settings
 # ─────────────────────────────────────────────
 
 PROMPT = """\
-You are a placement-prep research analyst. Research the company "{company}" using the web search tool (never rely on memory) and produce a structured dossier.
+You are a placement-prep research analyst for an INDIAN student preparing for campus placement. Research the company "{company}" using the web search tool (never rely on memory) and produce a structured dossier.
+
+INDIA FIRST — this report is read by a student who will interview and work in INDIA:
+- If the company is global, PRIORITIZE its India operations: India offices/cities, hiring scale in India, the experience of Indian employees, and India-specific news.
+- Prefer India-focused sources when they exist: AmbitionBox, Glassdoor India, Indeed India, Indian business press, and the company's India careers page.
+- A company can be great abroad but weaker in India (or the reverse). When the two differ, present the INDIA experience first and note the difference.
+- ALL salary figures MUST be in Indian Rupees (₹), e.g. "₹8-12 LPA". If a source reports a foreign currency, convert it to approximate INR (~₹85-90 per USD, or a reasonable current rate for other currencies), label it "approx", and keep the source.
+- Recent news: prioritize India news (hiring drives, campus programs, expansion, India pay/benefit changes) over global news.
 
 Include ALL of these source types where they exist:
-- Company profile / about page
-- Annual reports (financials)
-- Careers page
-- Employee reviews (Glassdoor, AmbitionBox, Indeed, etc.)
-- Salary reports (Glassdoor, AmbitionBox, Payscale, levels.fyi, etc.)
-- Recent news (last 6-12 months)
+- Company profile / about page (India site preferred)
+- Annual reports (India-relevant figures)
+- Careers page (India hiring)
+- Employee reviews (AmbitionBox, Glassdoor India, Indeed India, etc.)
+- Salary reports (India data)
+- Recent news (India-focused, last 6-12 months)
 
 Return ONLY raw JSON (no markdown fences, no explanation) in exactly this shape:
 {{
-  "overview": "2-4 sentence factual overview: what the company does, scale, notable facts.",
-  "pros": ["4-6 genuine positives from employee reviews, each a complete sentence"],
-  "cons": ["4-6 genuine negatives from employee reviews, each a complete sentence"],
-  "salaries": ["3-5 salary data points, e.g. 'Software Engineer fresher: ₹8-12 LPA (AmbitionBox)'. Use a range, not a single figure"],
-  "work_life_balance": "2-4 sentences on work culture, hours, WLB from reviews, balanced — name both good and bad.",
+  "overview": "2-4 sentence factual overview: what the company does, scale, notable facts — with its India footprint called out.",
+  "india_presence": "2-3 sentences on India operations: offices/cities, approximate India headcount, whether they hire freshers, and campus program name if any.",
+  "pros": ["4-6 genuine positives from INDIAN employee reviews, each a complete sentence"],
+  "cons": ["4-6 genuine negatives from INDIAN employee reviews, each a complete sentence"],
+  "salaries": ["3-5 salary data points for INDIA roles in INR, e.g. 'Fresher Software Engineer: ₹4-7 LPA (AmbitionBox)'. Use ranges, not a single figure"],
+  "work_life_balance": "2-4 sentences on work culture, hours, and WLB in INDIA from Indian reviews — balanced, name both good and bad.",
   "sources": [
     {{"title": "page title", "url": "https://..."}}
   ]
@@ -52,9 +65,8 @@ Return ONLY raw JSON (no markdown fences, no explanation) in exactly this shape:
 Grounding rules:
 - Every claim in pros/cons/salaries/work_life_balance MUST be supported by a source in "sources".
 - Sources MUST be the actual URLs returned by the search tool — do not invent or reconstruct URLs.
-- Use the currency and salary convention of the company's country.
-- If the company is unknown or has no public data, return an "error" field instead:
-  {{"error": "No reliable public information found for this company."}}
+- If the company has no meaningful India presence or no public data, return:
+  {{"error": "No reliable public information found about this company's India presence."}}
 """
 
 
@@ -64,10 +76,10 @@ Grounding rules:
 
 def generate_company_report(company: str) -> dict:
     """
-    Grounded company dossier via Gemini + Google Search.
+    India-first grounded company dossier via Gemini + Google Search.
 
-    Returns {company, overview, pros, cons, salaries, work_life_balance,
-             sources, generated_at} — or {"error": ...} on failure.
+    Returns {company, overview, india_presence, pros, cons, salaries,
+             work_life_balance, sources} — or {"error": ...}.
     """
     t0 = time.time()
     company = (company or "").strip()
@@ -154,6 +166,7 @@ def generate_company_report(company: str) -> dict:
     return {
         "company": company,
         "overview": _str("overview", "No overview available."),
+        "india_presence": _str("india_presence"),
         "pros": _lst("pros"),
         "cons": _lst("cons"),
         "salaries": _lst("salaries"),

@@ -23,6 +23,7 @@ from backend.api.schemas import (
     CompanyInfo, CompanyListResponse,
     CompanyAboutRequest, CompanyAboutResponse,
     ResumeAnalyzeResponse,
+    FastPrepResponse,
     EvalRunRequest, EvalResultsResponse,
     StatsResponse,
 )
@@ -292,6 +293,61 @@ async def analyze_resume_endpoint(
         raise
     except Exception as e:
         logger.error(f"Resume analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# Fast Prep — company + JD + days-left → day-by-day study plan
+# ============================================================
+
+@router.post("/fast-prep/plan", response_model=FastPrepResponse)
+async def fast_prep_endpoint(
+    company: str = Form(default=""),
+    days_left: int = Form(...),
+    level: str = Form(default="medium"),
+    jd_file: UploadFile | None = File(default=None),
+):
+    """
+    Build a day-by-day study plan from a company name and/or a JD PDF, given how
+    many days are left and how hard to go (simple | medium | hard).
+
+    Returns two-tab content:
+      - interview_questions → Top Questions tab (real, frequency-ranked, cited)
+      - core_concepts + dsa + schedule → Study Plan tab
+
+    JD PDF (if provided) is processed in-memory and never persisted.
+    """
+    company = (company or "").strip()
+
+    jd_bytes = None
+    if jd_file is not None and jd_file.filename:
+        if not jd_file.filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail="jd_file must be a PDF")
+        jd_bytes = await jd_file.read()
+        if not jd_bytes:
+            jd_bytes = None
+
+    if not company and not jd_bytes:
+        raise HTTPException(status_code=400, detail="Provide a company name or upload a JD PDF (at least one).")
+
+    try:
+        from backend.rag.fast_prep import generate_fast_prep_plan
+
+        result = generate_fast_prep_plan(
+            company=company,
+            jd_pdf_bytes=jd_bytes,
+            days_left=days_left,
+            level=level,
+        )
+
+        if "error" in result:
+            raise HTTPException(status_code=422, detail=result["error"])
+
+        return FastPrepResponse(**result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fast Prep failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -97,6 +97,20 @@ class APIService {
     });
   }
 
+  // Fast Prep — company and/or JD PDF + days left + level → day-by-day study plan
+  async getFastPrepPlan({ company = '', daysLeft, level = 'medium', jdFile = null }) {
+    const formData = new FormData();
+    formData.append('company', company || '');
+    formData.append('days_left', daysLeft);
+    formData.append('level', level);
+    if (jdFile) formData.append('jd_file', jdFile);
+
+    return this.request('/fast-prep/plan', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
   // Evaluation
   async runEval(modes = ['dense_only', 'hybrid', 'hybrid_reranked'], includeFaithfulness = false) {
     return this.request('/eval/run', {

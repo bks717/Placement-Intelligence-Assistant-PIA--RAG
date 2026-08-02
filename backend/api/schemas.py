@@ -91,11 +91,13 @@ class CompanySource(BaseModel):
 
 class CompanyAboutResponse(BaseModel):
     """
-    Grounded company dossier — every claim backed by real web sources
+    India-first grounded company dossier — every claim backed by real web sources
     (company profile, annual reports, careers page, reviews, salary reports, news).
+    Salaries are in INR.
     """
     company: str
     overview: str
+    india_presence: str = ""
     pros: list[str] = []
     cons: list[str] = []
     salaries: list[str] = []
@@ -199,6 +201,75 @@ class EvalResultsResponse(BaseModel):
     timestamp: str
     eval_set_size: int
     modes: dict
+
+
+# ============================================================
+# Fast Prep
+# ============================================================
+
+class SourceRef(BaseModel):
+    """A corpus citation (file + page) behind a retrieved claim."""
+    file: str
+    page: int | str
+
+
+class InterviewQuestion(BaseModel):
+    """A most-asked company interview question with its source."""
+    question: str
+    asked_in: int = 1
+    round: str = "Technical"
+    source: Optional[SourceRef] = None
+
+
+class ConceptItem(BaseModel):
+    """A single must-know concept with its reference link."""
+    name: str
+    link: str = ""
+
+
+class CoreConceptBucket(BaseModel):
+    """A core-subject bucket with per-concept links."""
+    bucket: str
+    priority: str = "medium"
+    concepts: list[ConceptItem] = []
+    why: str = ""
+
+
+class DSAProblem(BaseModel):
+    """A named DSA problem with a practice link."""
+    name: str
+    difficulty: str = "Medium"
+    link: str = ""
+
+
+class DSAPattern(BaseModel):
+    """A DSA pattern with its named problems."""
+    pattern: str
+    problems: list[DSAProblem] = []
+
+
+class ScheduleDay(BaseModel):
+    """One day of the study plan."""
+    day: int
+    focus: str
+    concepts: list[str] = []
+    dsa: list[str] = []
+    revise_questions: list[str] = []
+
+
+class FastPrepResponse(BaseModel):
+    """Response from the /api/fast-prep/plan endpoint (drives two tabs)."""
+    company: str
+    role: str = "General SDE"
+    days_left: int
+    level: str = "medium"
+    density: str = "moderate"
+    rounds: list[str] = []
+    note: str = ""
+    interview_questions: list[InterviewQuestion] = []   # Top Questions tab
+    core_concepts: list[CoreConceptBucket] = []         # Study Plan tab
+    dsa: list[DSAPattern] = []                          # Study Plan tab
+    schedule: list[ScheduleDay] = []                    # Study Plan tab
 
 
 # ============================================================

@@ -9,6 +9,7 @@ import {
   Scale,
   Link as LinkIcon,
   FileText,
+  MapPin,
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -50,8 +51,8 @@ export default function CompaniesPage() {
       <div className="page-header">
         <h1 className="page-title">About the Company</h1>
         <p className="page-subtitle">
-          Search any company for a fact-checked breakdown — pros, cons, pay and
-          work-life balance, backed by real web sources.
+          Search any company for an India-focused breakdown — pros, cons,
+          ₹ pay and work-life balance, backed by real sources.
         </p>
       </div>
 
@@ -112,6 +113,16 @@ export default function CompaniesPage() {
               <p className="about-overview">{report.overview}</p>
             </section>
 
+            {/* India presence */}
+            {report.india_presence && (
+              <section className="about-section">
+                <h2 className="about-section-title">
+                  <MapPin size={18} /> India presence
+                </h2>
+                <p className="about-overview">{report.india_presence}</p>
+              </section>
+            )}
+
             {/* Pros / Cons side by side */}
             <div className="about-proscons">
               <section className="about-section about-pros">
@@ -140,7 +151,7 @@ export default function CompaniesPage() {
             {/* Salaries */}
             <section className="about-section">
               <h2 className="about-section-title">
-                <IndianRupee size={18} /> Salaries
+                <IndianRupee size={18} /> Salaries <span className="about-sal-label">(India · ₹ LPA)</span>
               </h2>
               <ul className="about-list">
                 {report.salaries?.length
