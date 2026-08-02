@@ -5,7 +5,7 @@ __pycache__/
 *.pyo
 
 # Data & Models
-data/
+/data/
 chroma_data/
 json_data/
 logs/
