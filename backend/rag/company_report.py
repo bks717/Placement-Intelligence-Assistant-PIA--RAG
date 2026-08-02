@@ -94,13 +94,10 @@ def generate_company_report(company: str) -> dict:
         client = genai.Client(api_key=settings.google_api_key)
 
         resp = client.models.generate_content(
-            model=settings.llm_grounding_model,  # full model — grounding needs it (lite = instant 429)
+            model=settings.llm_grounding_model,
             contents=PROMPT.format(company=company),
             config=types.GenerateContentConfig(
                 tools=[types.Tool(google_search=types.GoogleSearch())],
-                # Cap thinking: budget=0 gives 0 sources and breaks grounding;
-                # 512 is enough for sources at ~10s, vs ~32s uncapped.
-                thinking_config=types.ThinkingConfig(thinking_budget=512),
                 temperature=0.0,
             ),
         )
