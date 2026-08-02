@@ -94,10 +94,13 @@ def fetch_interview_questions(company: str, role: str = "") -> dict:
             prompt += f'\n\n(For context, the plan targets the role "{role}" — keep questions relevant to it.)'
 
         resp = client.models.generate_content(
-            model=settings.llm_grounding_model,
+            model=settings.llm_grounding_model,  # full model — grounding needs it (lite = instant 429)
             contents=prompt,
             config=types.GenerateContentConfig(
                 tools=[types.Tool(google_search=types.GoogleSearch())],
+                # Cap thinking: budget=0 gives 0 sources and breaks grounding;
+                # 512 is enough for sources at ~10s, vs ~32s uncapped.
+                thinking_config=types.ThinkingConfig(thinking_budget=512),
                 temperature=0.0,
             ),
         )
