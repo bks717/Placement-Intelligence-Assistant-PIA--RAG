@@ -76,7 +76,7 @@ app = FastAPI(
         "Analyze JDs, retrieve interview experiences, and get cited answers."
     ),
     version="1.0.0",
-    lifespan=lifespan,
+    lifespan=lifespan if not os.environ.get("VERCEL") else None,
 )
 
 # CORS — allow frontend dev server and Vercel domains
@@ -96,6 +96,20 @@ app.add_middleware(
 
 # Register routes
 app.include_router(router)
+
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled error: {exc}")
+    import traceback
+    logger.error(traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal Server Error: {str(exc)}"}
+    )
 
 
 # Health check
