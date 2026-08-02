@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     google_api_key: str = Field(default="", description="Google Gemini API key")
 
     def model_post_init(self, __context):
+        super().model_post_init(__context)
         import os
         if not self.google_api_key:
             self.google_api_key = os.environ.get("GOOGLE_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "")
