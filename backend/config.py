@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     # --- API Keys ---
     google_api_key: str = Field(default="", description="Google Gemini API key")
 
+    def model_post_init(self, __context):
+        import os
+        if not self.google_api_key:
+            self.google_api_key = os.environ.get("GOOGLE_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "")
+
     # --- ChromaDB ---
     chroma_persist_dir: str = Field(default="./chroma_data")
 
