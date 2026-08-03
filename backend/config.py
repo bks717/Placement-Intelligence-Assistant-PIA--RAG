@@ -13,12 +13,15 @@ class Settings(BaseSettings):
 
     # --- API Keys ---
     google_api_key: str = Field(default="", description="Google Gemini API key")
+    groq_api_key: str = Field(default="", description="Groq API key (primary for non-grounded text)")
 
     def model_post_init(self, __context):
         super().model_post_init(__context)
         import os
         if not self.google_api_key:
             self.google_api_key = os.environ.get("GOOGLE_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "")
+        if not self.groq_api_key:
+            self.groq_api_key = os.environ.get("GROQ_API_KEY", "")
         if os.environ.get("VERCEL"):
             self.chroma_persist_dir = "/tmp/chroma_data"
             self.json_store_dir = "/tmp/json_data"
@@ -38,7 +41,10 @@ class Settings(BaseSettings):
     # --- Models ---
     embedding_model: str = Field(default="sentence-transformers/all-MiniLM-L6-v2")
     reranker_model: str = Field(default="cross-encoder/ms-marco-MiniLM-L-6-v2")
-    llm_model: str = Field(default="gemini-2.5-flash")
+    # Non-grounded answer generation (Ask Puddy). Groq is tried first (see
+    # llm_client.py); this Gemini model is the fallback. Lite = 500 RPD vs the
+    # old 2.5-flash 20 RPD, so even the fallback path has 25x more headroom.
+    llm_model: str = Field(default="gemini-3.1-flash-lite")
     # Fast model for structured JSON extraction (resume analyzer, ingestion).
     # Thinking models (2.5-flash / flash-latest) burn 30-50s of internal reasoning
     # on mechanical extraction tasks and hit 504 DEADLINE_EXCEEDED — a lite model
@@ -46,10 +52,16 @@ class Settings(BaseSettings):
     llm_extraction_model: str = Field(default="gemini-3.1-flash-lite")
     llm_temperature: float = Field(default=0.2)
 
-    # Grounded company research (About the Company). NOTE: Google Search
-    # grounding requires a FULL model — lite models return instant 429
-    # RESOURCE_EXHAUSTED on free tier. gemini-2.5-flash returns in ~4-7s.
-    llm_grounding_model: str = Field(default="gemini-2.5-flash")
+    # --- Groq (primary for non-grounded text: Ask Puddy, extraction) ---
+    # Separate quota from Google, high free-tier RPD on open models. Grounded
+    # features stay on Gemini (Groq has no Google Search grounding).
+    # gpt-oss-20b: fast, production-tier, not on Groq's deprecation list.
+    groq_model: str = Field(default="openai/gpt-oss-20b")
+
+    # Grounded company research (About Company, Top Asked). Google Search
+    # grounding draws from a SEPARATE tool quota (~1.5K RPD), so lite models
+    # now work here too — 500 RPD vs the old 2.5-flash 20 RPD.
+    llm_grounding_model: str = Field(default="gemini-3.1-flash-lite")
 
     # --- Retrieval ---
     dense_weight: float = Field(default=0.5)

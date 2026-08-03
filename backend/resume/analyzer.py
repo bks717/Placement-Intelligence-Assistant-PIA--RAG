@@ -187,20 +187,7 @@ def analyze_resume(resume_pdf_bytes: bytes, jd_pdf_bytes: bytes) -> dict:
     logger.info(f"Formatting done in {time.time()-t0:.1f}s: score={fmt['score']}, issues={len(fmt['issues'])}")
 
     try:
-        from langchain_google_genai import ChatGoogleGenerativeAI
-
-        os.environ.setdefault("GOOGLE_API_KEY", settings.google_api_key)
-
-        # Use a fast lite model for extraction (settings.llm_extraction_model).
-        # Thinking models (gemini-2.5-flash / flash-latest) spend 30-50s on internal
-        # reasoning for this mechanical JSON task and hit 504 DEADLINE_EXCEEDED;
-        # a lite model returns the same JSON in ~2s.
-        llm = ChatGoogleGenerativeAI(
-            model=settings.llm_extraction_model,
-            temperature=0.0,  # deterministic = faster, no sampling overhead
-            max_retries=0,
-            timeout=45,
-        )
+        from backend.rag.llm_client import chat_invoke
 
         prompt = PROMPT.format(
             jd_text=jd_text[:3500],
@@ -212,9 +199,10 @@ def analyze_resume(resume_pdf_bytes: bytes, jd_pdf_bytes: bytes) -> dict:
         )
 
         t1 = time.time()
-        logger.info(f"Sending ATS prompt to {settings.llm_model}...")
-        response = llm.invoke(prompt)
-        logger.info(f"Gemini responded in {time.time()-t1:.1f}s")
+        logger.info("Sending ATS prompt (Groq primary → Gemini lite fallback)...")
+        # temp 0.0 = deterministic, fast; mechanical JSON extraction task.
+        response = chat_invoke(prompt, temperature=0.0)
+        logger.info(f"LLM responded in {time.time()-t1:.1f}s")
 
         # response.content may be a plain string OR a list of content blocks
         # (thinking-model shape: [{"type": "text", "text": "..."}]). Normalize.

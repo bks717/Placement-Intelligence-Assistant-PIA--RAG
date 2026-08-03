@@ -74,12 +74,12 @@ def extract_company_info(chunks: list[Document], company: str) -> dict:
     )
 
     try:
-        llm = _get_llm()
-        structured_llm = llm.with_structured_output(CompanyMetadata)
+        from backend.rag.llm_client import chat_invoke
         prompt = EXTRACT_COMPANY_PROMPT.format(
             company=company, text=combined_text[:6000]
         )
-        response = structured_llm.invoke(prompt)
+        # Groq (primary) → Gemini lite (fallback), structured output validated.
+        response = chat_invoke(prompt, structured_schema=CompanyMetadata, temperature=0.1)
         return response.model_dump()
 
     except Exception as e:
@@ -102,12 +102,15 @@ async def extract_questions_from_chunk_async(chunk: Document, sem: asyncio.Semap
     async with sem:
         loop = asyncio.get_running_loop()
         try:
-            llm = _get_llm()
-            structured_llm = llm.with_structured_output(InterviewQuestionsList)
+            from backend.rag.llm_client import chat_invoke
             prompt = EXTRACT_QUESTIONS_PROMPT.format(text=chunk.text)
 
-            # LangChain invoke is synchronous and network-blocking, run in executor
-            result = await loop.run_in_executor(None, lambda: structured_llm.invoke(prompt))
+            # LangChain invoke is synchronous and network-blocking, run in executor.
+            # Groq (primary) → Gemini lite (fallback); structured output validated.
+            result = await loop.run_in_executor(
+                None,
+                lambda: chat_invoke(prompt, structured_schema=InterviewQuestionsList, temperature=0.1),
+            )
             questions = [q.model_dump() for q in result.questions]
 
             # Enrich with metadata

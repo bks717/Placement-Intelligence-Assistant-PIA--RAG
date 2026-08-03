@@ -121,9 +121,8 @@ def generate_answer(
     context = format_context(chunks)
     sources = format_sources(chunks)
 
-    llm = _get_llm()
-
     from langchain_core.messages import SystemMessage, HumanMessage
+    from backend.rag.llm_client import chat_invoke
 
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
@@ -136,8 +135,13 @@ def generate_answer(
     logger.info(f"Generating answer for: '{query[:50]}...' with {len(chunks)} context chunks")
 
     try:
-        response = llm.invoke(messages)
+        # Groq (primary) → Gemini lite (fallback), each with its own quota.
+        response = chat_invoke(messages, temperature=settings.llm_temperature)
         answer = response.content
+        if isinstance(answer, list):
+            answer = "".join(
+                p.get("text", "") if isinstance(p, dict) else str(p) for p in answer
+            )
 
         logger.info(f"Answer generated: {len(answer)} chars")
 
@@ -152,9 +156,9 @@ def generate_answer(
         msg = str(e)
         if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
             friendly_err = (
-                "⚠️ The Gemini API daily free-tier quota (20 requests/day) has been exceeded for this API key. "
-                "However, the local RAG pipeline successfully retrieved the relevant interview experience chunks "
-                "listed in the 'Sources' tab below! Please check the sources tab for the direct answers, or try again later."
+                "⚠️ All LLM providers (Groq + Gemini) hit their daily free-tier quota for this key. "
+                "The local RAG pipeline still retrieved the relevant interview experience chunks "
+                "listed in the 'Sources' tab below — check them for the direct answers, or try again later."
             )
         else:
             friendly_err = f"Error generating answer: {msg}"

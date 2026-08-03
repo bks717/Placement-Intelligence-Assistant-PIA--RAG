@@ -587,15 +587,8 @@ def generate_fast_prep_plan(
     llm_error = None
     if company or jd_final:
         try:
-            from langchain_google_genai import ChatGoogleGenerativeAI
+            from backend.rag.llm_client import chat_invoke
 
-            os.environ.setdefault("GOOGLE_API_KEY", settings.google_api_key)
-            llm = ChatGoogleGenerativeAI(
-                model=settings.llm_extraction_model,
-                temperature=0.1,
-                max_retries=0,
-                timeout=60,
-            )
             prompt = PROMPT.format(
                 company=company or "(not provided — rely on the JD)",
                 ie_corpus=ie_corpus[:8000] or "(none)",
@@ -603,7 +596,8 @@ def generate_fast_prep_plan(
             )
             logger.info(f"Fast Prep: company='{company}' days={days_left} level={level} "
                         f"ie_chars={len(ie_corpus)} jd_chars={len(jd_final)}")
-            resp = llm.invoke(prompt)
+            # Groq (primary) → Gemini lite (fallback).
+            resp = chat_invoke(prompt, temperature=0.1)
 
             raw = resp.content
             if isinstance(raw, list):
