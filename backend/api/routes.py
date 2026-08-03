@@ -306,7 +306,7 @@ async def fast_prep_endpoint(
     company: str = Form(default=""),
     days_left: int = Form(...),
     level: str = Form(default="medium"),
-    jd_file: UploadFile | None = File(default=None),
+    jd_file: Optional[UploadFile] = None,
 ):
     """
     Build a day-by-day study plan from a company name and/or a JD PDF, given how

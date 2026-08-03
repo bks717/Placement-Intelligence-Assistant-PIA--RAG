@@ -233,9 +233,6 @@ def fetch_interview_questions(company: str, role: str = "") -> dict:
             contents=prompt,
             config=types.GenerateContentConfig(
                 tools=[types.Tool(google_search=types.GoogleSearch())],
-                # Cap thinking: budget=0 gives 0 sources and breaks grounding;
-                # 512 is enough for sources at ~10s, vs ~32s uncapped.
-                thinking_config=types.ThinkingConfig(thinking_budget=512),
                 temperature=0.0,
             ),
         )
