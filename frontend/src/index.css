@@ -2226,3 +2226,63 @@ body::before {
   }
 }
 
+/* Mobile top navigation header */
+.mobile-header {
+  display: none;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  z-index: 90;
+}
+
+.menu-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+
+.mobile-logo-text {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+/* Sidebar backdrop overlay on mobile */
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 95;
+}
+
+/* Mobile layout fixes */
+@media (max-width: 1024px) {
+  .mobile-header {
+    display: flex;
+  }
+  .main-content {
+    margin-left: 0 !important;
+    padding-top: 60px; /* offset the mobile top bar height */
+  }
+  .sidebar {
+    z-index: 100;
+  }
+}
+
+

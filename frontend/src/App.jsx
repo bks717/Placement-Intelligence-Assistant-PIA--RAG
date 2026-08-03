@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Menu } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import SplashLoader from './components/SplashLoader';
 import Dashboard from './pages/Dashboard';
@@ -14,6 +15,7 @@ import AdminPage from './pages/AdminPage';
 
 export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [splashLoading, setSplashLoading] = useState(true);
   const [splashFadeOut, setSplashFadeOut] = useState(false);
 
@@ -36,7 +38,20 @@ export default function App() {
   return (
     <BrowserRouter>
       <div className="app-layout">
-        <Sidebar isCollapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
+        {/* Mobile top navigation bar */}
+        <header className="mobile-header">
+          <button className="menu-toggle-btn" onClick={() => setSidebarOpen(true)} aria-label="Open navigation menu">
+            <Menu size={22} />
+          </button>
+          <span className="mobile-logo-text">PUDDY</span>
+        </header>
+
+        <Sidebar 
+          isCollapsed={sidebarCollapsed} 
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} 
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
         <main className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
