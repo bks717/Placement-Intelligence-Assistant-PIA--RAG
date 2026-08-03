@@ -86,6 +86,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
+        extra = "ignore"
 
     def get_chunk_config(self, doc_type: str) -> dict:
         """Return chunk_size and chunk_overlap for a given doc type."""
@@ -107,10 +108,6 @@ class Settings(BaseSettings):
             "chunk_size": self.chunk_size_interview,
             "chunk_overlap": self.chunk_overlap_interview,
         })
-
-    @property
-    def chroma_path(self) -> Path:
-        return Path(self.chroma_persist_dir)
 
     @property
     def json_store_path(self) -> Path:
