@@ -23,17 +23,14 @@ class Settings(BaseSettings):
         if not self.groq_api_key:
             self.groq_api_key = os.environ.get("GROQ_API_KEY", "")
         if os.environ.get("VERCEL"):
-            self.chroma_persist_dir = "/tmp/chroma_data"
             self.json_store_dir = "/tmp/json_data"
             self.data_dir = "/tmp/data"
 
-    # --- ChromaDB ---
-    chroma_persist_dir: str = Field(default="./chroma_data")
-
     # --- MongoDB ---
-    use_mongodb: bool = Field(default=False)
+    use_mongodb: bool = Field(default=True)
     mongodb_uri: str = Field(default="mongodb://localhost:27017")
     mongodb_db_name: str = Field(default="pia_db")
+    mongodb_vector_collection: str = Field(default="vector_chunks")
 
     # --- JSON Store (fallback) ---
     json_store_dir: str = Field(default="./json_data")

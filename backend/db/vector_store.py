@@ -1,90 +1,60 @@
 """
-ChromaDB Vector Store Wrapper
+MongoDB Atlas Vector Search Wrapper
 
 Provides a unified interface for storing and querying document chunks
-with embeddings and metadata. Supports metadata pre-filtering for
-company/doc_type scoped retrieval.
+with embeddings and metadata in MongoDB Atlas. Supports metadata pre-filtering.
 """
 
-try:
-    import chromadb
-    from chromadb.config import Settings as ChromaSettings
-except ImportError as e:
-    logger = None
-    chromadb = None
-    ChromaSettings = None
-    import sys
-    sys.stderr.write(f"Warning: Could not import chromadb: {e}\n")
+import time
+from typing import Optional
+from loguru import logger
+from pymongo import MongoClient
+
 try:
     from sentence_transformers import SentenceTransformer
 except ImportError:
     SentenceTransformer = None
 
-from typing import Optional
-from loguru import logger
-
 from backend.config import settings
 
 
 class VectorStore:
-    """Wrapper around ChromaDB for chunk storage and similarity search."""
+    """Wrapper around MongoDB Atlas Vector Search for chunk storage and similarity search."""
 
     def __init__(self):
-        self._client: Optional[chromadb.ClientAPI] = None
-        self._collection: Optional[chromadb.Collection] = None
+        self._client: Optional[MongoClient] = None
+        self._db = None
+        self._collection = None
         self._embedding_model: Optional[SentenceTransformer] = None
 
     def initialize(self):
-        """Initialize ChromaDB client and embedding model."""
-        if chromadb is None:
-            logger.warning("ChromaDB is not installed or failed to import. Vector store functions will be disabled.")
-            return
-        logger.info(f"Initializing ChromaDB at: {settings.chroma_persist_dir}")
+        """Initialize MongoDB client and embedding model."""
+        logger.info(f"Connecting to MongoDB Vector Store at: {settings.mongodb_uri[:35]}...")
         try:
-            self._client = chromadb.PersistentClient(
-                path=settings.chroma_persist_dir,
-                settings=ChromaSettings(anonymized_telemetry=False),
-            )
-            self._collection = self._client.get_or_create_collection(
-                name="pia_chunks",
-                metadata={"hnsw:space": "cosine"},
-            )
+            self._client = MongoClient(settings.mongodb_uri)
+            self._db = self._client[settings.mongodb_db_name]
+            self._collection = self._db[settings.mongodb_vector_collection]
         except Exception as e:
-            logger.warning(f"Failed to initialize ChromaDB PersistentClient: {e}. Falling back to EphemeralClient.")
-            self._client = chromadb.EphemeralClient(
-                settings=ChromaSettings(anonymized_telemetry=False)
-            )
-            self._collection = self._client.get_or_create_collection(
-                name="pia_chunks",
-                metadata={"hnsw:space": "cosine"},
-            )
+            logger.error(f"Failed to connect to MongoDB: {e}")
+            raise e
+
         logger.info(f"Loading embedding model: {settings.embedding_model}")
         if SentenceTransformer is not None:
             try:
                 self._embedding_model = SentenceTransformer(settings.embedding_model)
             except Exception as e:
-                logger.warning(f"Could not load SentenceTransformer: {e}. Falling back to DefaultEmbeddingFunction.")
+                logger.warning(f"Could not load SentenceTransformer: {e}")
                 self._embedding_model = None
         else:
-            logger.info("SentenceTransformer not installed. Falling back to DefaultEmbeddingFunction (ONNX).")
+            logger.warning("SentenceTransformer is not installed. Dense retrieval will fail.")
             self._embedding_model = None
 
-        if self._embedding_model is None:
-            try:
-                from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
-                self._embedding_ef = DefaultEmbeddingFunction()
-            except Exception as e:
-                logger.error(f"Failed to initialize DefaultEmbeddingFunction: {e}. Dense retrieval will be unavailable.")
-                self._embedding_ef = None
-
         logger.info(
-            f"Vector store ready. Collection has {self._collection.count() if self._collection else 0} chunks."
+            f"Vector store ready. Collection '{settings.mongodb_vector_collection}' has {self._collection.count_documents({})} chunks."
         )
 
     @property
-    def collection(self) -> Optional[chromadb.Collection]:
-        if chromadb is None:
-            return None
+    def collection(self):
         if self._collection is None:
             self.initialize()
         return self._collection
@@ -102,17 +72,25 @@ class VectorStore:
         """Embed a single text string."""
         if self.embedding_model is not None:
             return self.embedding_model.encode(text).tolist()
-        if not hasattr(self, "_embedding_ef") or self._embedding_ef is None:
-            raise RuntimeError("ChromaDB DefaultEmbeddingFunction is unavailable. Try pushing/saving your embeddings offline.")
-        return self._embedding_ef([text])[0]
+        raise RuntimeError("Embedding model is unavailable. Make sure sentence-transformers is installed.")
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         """Embed multiple text strings."""
         if self.embedding_model is not None:
             return self.embedding_model.encode(texts).tolist()
-        if not hasattr(self, "_embedding_ef") or self._embedding_ef is None:
-            raise RuntimeError("ChromaDB DefaultEmbeddingFunction is unavailable. Try pushing/saving your embeddings offline.")
-        return self._embedding_ef(texts)
+        raise RuntimeError("Embedding model is unavailable. Make sure sentence-transformers is installed.")
+
+    def _map_filter(self, where: dict) -> dict:
+        """Map ChromaDB-style `where` query into MongoDB dot-notation filters."""
+        if not where:
+            return {}
+        mapped = {}
+        for k, v in where.items():
+            if k in ("$and", "$or"):
+                mapped[k] = [self._map_filter(item) for item in v]
+            else:
+                mapped[f"metadata.{k}"] = v
+        return mapped
 
     def add_chunks(
         self,
@@ -122,7 +100,7 @@ class VectorStore:
         embeddings: Optional[list[list[float]]] = None,
     ):
         """
-        Add document chunks to the vector store.
+        Add document chunks to the MongoDB collection.
 
         Args:
             chunk_ids: Unique IDs for each chunk
@@ -133,17 +111,24 @@ class VectorStore:
         if embeddings is None:
             embeddings = self.embed_texts(texts)
 
-        # ChromaDB has a batch limit — process in batches of 500
-        batch_size = 500
-        for i in range(0, len(chunk_ids), batch_size):
-            end = i + batch_size
-            self.collection.upsert(
-                ids=chunk_ids[i:end],
-                documents=texts[i:end],
-                embeddings=embeddings[i:end],
-                metadatas=metadatas[i:end],
-            )
-        logger.info(f"Added/updated {len(chunk_ids)} chunks in vector store.")
+        operations = []
+        for cid, txt, meta, emb in zip(chunk_ids, texts, metadatas, embeddings):
+            operations.append({
+                "_id": cid,
+                "text": txt,
+                "metadata": meta,
+                "embedding": emb,
+            })
+
+        from pymongo import UpdateOne
+        bulk_ops = [
+            UpdateOne({"_id": op["_id"]}, {"$set": op}, upsert=True)
+            for op in operations
+        ]
+
+        if bulk_ops:
+            self.collection.bulk_write(bulk_ops)
+        logger.info(f"Added/updated {len(chunk_ids)} chunks in MongoDB vector store.")
 
     def similarity_search(
         self,
@@ -152,43 +137,53 @@ class VectorStore:
         where: Optional[dict] = None,
     ) -> list[dict]:
         """
-        Perform dense similarity search with optional metadata filtering.
-
-        Metadata filtering happens BEFORE retrieval — cuts search space,
-        doesn't post-filter results.
+        Perform dense similarity search using MongoDB Atlas Vector Search.
 
         Args:
             query: Search query text
             top_k: Number of results to return
-            where: ChromaDB where clause for metadata filtering
-                   e.g., {"company": "ProcDNA"} or
-                   {"$and": [{"company": "ProcDNA"}, {"doc_type": "interview_experience"}]}
+            where: Metadata filters
 
         Returns:
             List of dicts with keys: id, text, metadata, distance
         """
         query_embedding = self.embed_text(query)
+        mongo_filter = self._map_filter(where) if where else {}
 
-        query_params = {
-            "query_embeddings": [query_embedding],
-            "n_results": min(top_k, self.collection.count() or top_k),
-            "include": ["documents", "metadatas", "distances"],
-        }
-        if where:
-            query_params["where"] = where
+        pipeline = [
+            {
+                "$vectorSearch": {
+                    "index": "vector_index",
+                    "path": "embedding",
+                    "queryVector": query_embedding,
+                    "numCandidates": max(top_k * 10, 100),
+                    "limit": top_k,
+                }
+            }
+        ]
 
-        results = self.collection.query(**query_params)
+        if mongo_filter:
+            pipeline[0]["$vectorSearch"]["filter"] = mongo_filter
 
-        # Flatten results into list of dicts
+        pipeline.append({
+            "$project": {
+                "_id": 1,
+                "text": 1,
+                "metadata": 1,
+                "score": {"$meta": "vectorSearchScore"}
+            }
+        })
+
+        results = self.collection.aggregate(pipeline)
+
         chunks = []
-        if results["ids"] and results["ids"][0]:
-            for i in range(len(results["ids"][0])):
-                chunks.append({
-                    "id": results["ids"][0][i],
-                    "text": results["documents"][0][i],
-                    "metadata": results["metadatas"][0][i],
-                    "distance": results["distances"][0][i],
-                })
+        for doc in results:
+            chunks.append({
+                "id": str(doc["_id"]),
+                "text": doc.get("text", ""),
+                "metadata": doc.get("metadata", {}),
+                "distance": 1.0 - doc.get("score", 0.0),  # Cosine distance
+            })
         return chunks
 
     def get_all_chunks(
@@ -197,54 +192,44 @@ class VectorStore:
         limit: Optional[int] = None,
     ) -> list[dict]:
         """
-        Get all chunks matching a metadata filter (for BM25 index building).
+        Get all chunks matching metadata query (for BM25 indexing).
 
         Args:
-            where: ChromaDB where clause
+            where: Metadata filter query
             limit: Maximum number of chunks to return
 
         Returns:
             List of dicts with keys: id, text, metadata
         """
-        get_params = {
-            "include": ["documents", "metadatas"],
-        }
-        if where:
-            get_params["where"] = where
-        if limit:
-            get_params["limit"] = limit
+        mongo_filter = self._map_filter(where) if where else {}
 
-        results = self.collection.get(**get_params)
+        cursor = self.collection.find(mongo_filter)
+        if limit:
+            cursor = cursor.limit(limit)
 
         chunks = []
-        if results["ids"]:
-            for i in range(len(results["ids"])):
-                chunks.append({
-                    "id": results["ids"][i],
-                    "text": results["documents"][i],
-                    "metadata": results["metadatas"][i],
-                })
+        for doc in cursor:
+            chunks.append({
+                "id": str(doc["_id"]),
+                "text": doc.get("text", ""),
+                "metadata": doc.get("metadata", {}),
+            })
         return chunks
 
     def delete_by_source(self, source_file: str):
         """Delete all chunks from a specific source file."""
-        self.collection.delete(where={"source_file": source_file})
-        logger.info(f"Deleted chunks from source: {source_file}")
+        res = self.collection.delete_many({"metadata.source_file": source_file})
+        logger.info(f"Deleted {res.deleted_count} chunks from source: {source_file}")
 
     def get_stats(self) -> dict:
         """Get collection statistics."""
-        count = self.collection.count()
+        count = self.collection.count_documents({})
         return {"total_chunks": count}
 
     def reset(self):
-        """Delete all data (use with caution)."""
-        if self._client:
-            self._client.delete_collection("pia_chunks")
-            self._collection = self._client.get_or_create_collection(
-                name="pia_chunks",
-                metadata={"hnsw:space": "cosine"},
-            )
-            logger.warning("Vector store reset — all chunks deleted.")
+        """Delete all vector search documents."""
+        res = self.collection.delete_many({})
+        logger.warning(f"Vector store reset — deleted {res.deleted_count} chunks.")
 
 
 # Singleton instance

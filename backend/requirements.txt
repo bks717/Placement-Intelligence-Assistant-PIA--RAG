@@ -15,8 +15,6 @@ langchain-google-genai>=2.1.0
 langchain-community>=0.3.20
 langchain-text-splitters>=0.3.6
 
-# Vector Store
-chromadb>=1.0.0
 
 # BM25
 rank-bm25>=0.2.2

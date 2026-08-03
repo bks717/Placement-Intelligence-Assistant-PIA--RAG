@@ -51,7 +51,8 @@ async def lifespan(app: FastAPI):
     logger.info(f"LLM Model: {settings.llm_model}")
     logger.info(f"Embedding Model: {settings.embedding_model}")
     logger.info(f"Reranker Model: {settings.reranker_model}")
-    logger.info(f"ChromaDB Path: {settings.chroma_persist_dir}")
+    logger.info(f"MongoDB DB: {settings.mongodb_db_name}")
+    logger.info(f"MongoDB Vector Collection: {settings.mongodb_vector_collection}")
     logger.info(f"Data Directory: {settings.data_dir}")
 
     # Pre-initialize vector store (loads embedding model)
