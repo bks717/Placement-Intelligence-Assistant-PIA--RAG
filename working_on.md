@@ -40,22 +40,17 @@ This document keeps track of recent architectural decisions, changes, and the cu
 
 ---
 
-## 📋 Outstanding Actions & Next Steps
+## 🚀 Current Deployment Status (Completed)
 
-1. **Deploy Backend to Render**:
-   * Open Render, select **Blueprint** or **Web Service**, and connect this repository.
-   * Enter the environment variables:
-     * `GOOGLE_API_KEY` (Gemini key)
-     * `GROQ_API_KEY` (Groq key)
-     * `USE_MONGODB` (`true` to link your MongoDB Atlas cluster, `false` to use local files)
-     * `MONGODB_URI` (MongoDB Atlas URI)
-     * `MONGODB_DB_NAME` (`pia_db`)
-     * `PYTHON_VERSION` (`3.12.0`)
-   * Trigger the deploy and copy your backend URL (e.g. `https://pia-backend.onrender.com`).
+* **Backend Service**:
+  * **Status**: **Live & Healthy**
+  * **Platform**: Render
+  * **Endpoint**: `https://placement-intelligence-assistant-pia-rag.onrender.com`
+  * **Database**: MongoDB Atlas Cluster connected and whitelisted.
+  * **LLM Engine**: Groq (primary) + Gemini (fallback) fully integrated.
 
-2. **Configure Vercel Environment Variables**:
-   * Open Vercel Dashboard for project `puddy`.
-   * Add environment variable:
-     * Key: `VITE_API_BASE_URL`
-     * Value: `https://your-render-backend-url.onrender.com`
-   * Trigger a **Redeploy** on Vercel so Vite compiles the frontend with the Render URL.
+* **Frontend UI**:
+  * **Status**: **Live & Fully Connected**
+  * **Platform**: Vercel
+  * **API URL Env Configured**: `VITE_API_BASE_URL = https://placement-intelligence-assistant-pia-rag.onrender.com/api` (re-compiled static client).
+  * **CORS Settings**: Fully configured on Render backend to permit requests from the Vercel app domain.
