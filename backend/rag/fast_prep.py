@@ -553,7 +553,7 @@ Return ONLY raw JSON (no markdown, no prose) in EXACTLY this shape:
 RULES
 - interview_questions: ONLY from the past experiences above. Merge near-duplicates and sum counts. Rank by asked_in desc. Cap 15. If experiences are empty, return [].
 - emphasis: infer from the JD skills and the questions students were actually asked. Use ONLY the six exact subject names listed. Empty list if you genuinely cannot tell.
-- Never invent questions. Never rate the company. If BOTH experiences and JD are empty, return {{"error": "Not enough data — enter a company we have data for, or upload a JD PDF."}}
+- Never invent questions. Never rate the company. If BOTH experiences and JD are empty, but the company name is provided, use your general knowledge of SDE interviews at this company to estimate the typical SDE role, rounds, and subject emphasis (and return [] for interview_questions). Only return {{"error": "Provide a company name or upload a JD PDF (at least one)."}} if BOTH the company name and JD are empty.
 """
 
 
@@ -622,8 +622,11 @@ def generate_fast_prep_plan(
                 data = json.loads(content)
                 logger.info("Fast Prep manual Gemini fallback successfully parsed JSON.")
 
-            if data.get("error") and not jd_final and not has_corpus_questions:
-                return {"error": data["error"]}
+            if data.get("error"):
+                if not company and not jd_final and not has_corpus_questions:
+                    return {"error": data["error"]}
+                # Otherwise, clear the error key so downstream keys parse normally
+                data.pop("error", None)
 
             role = str(data.get("role") or "General SDE").strip() or "General SDE"
             rounds = [str(r).strip() for r in (data.get("rounds") or []) if str(r).strip()]
