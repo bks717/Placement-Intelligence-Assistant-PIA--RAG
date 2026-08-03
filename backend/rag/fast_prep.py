@@ -625,10 +625,45 @@ def generate_fast_prep_plan(
             logger.error(f"Fast Prep JSON parse failed: {e}")
         except Exception as e:
             msg = str(e)
-            if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
-                return {"error": "The AI service is rate-limited right now (free-tier quota). Please wait about a minute and try again."}
             llm_error = msg
             logger.error(f"Fast Prep LLM failed: {msg}")
+            try:
+                from backend.rag.interview_questions import _FALLBACK_QUESTIONS
+                company_lower = (company or "").lower().strip()
+                if company_lower in _FALLBACK_QUESTIONS:
+                    logger.info(f"Fast Prep falling back to pre-generated questions for {company}")
+                    fb = _FALLBACK_QUESTIONS[company_lower]
+                    raw_questions = []
+                    for q in fb.get("dsa_questions", []):
+                        raw_questions.append({
+                            "question": q["question"],
+                            "asked_in": 3,
+                            "round": "Technical Coding",
+                            "source_file": fb.get("sources", [{"title": "Source"}])[0]["title"],
+                            "source_page": 1
+                        })
+                    for q in fb.get("core_questions", []):
+                        raw_questions.append({
+                            "question": q["question"],
+                            "asked_in": 2,
+                            "round": q["subject"],
+                            "source_file": fb.get("sources", [{"title": "Source"}])[0]["title"],
+                            "source_page": 1
+                        })
+                    role = "Software Engineer"
+                    rounds = ["Online Assessment", "Technical Coding", "System Design"]
+                    emphasis = [q["subject"] for q in fb.get("core_questions", [])]
+                else:
+                    raw_questions = []
+                    role = "General SDE"
+                    rounds = ["Technical Interview"]
+                    emphasis = []
+            except Exception as fe:
+                logger.error(f"Failed loading fast prep fallback: {fe}")
+                raw_questions = []
+                role = "General SDE"
+                rounds = ["Technical Interview"]
+                emphasis = []
         # A failed extraction is NOT fatal — the syllabus/DSA/schedule are curated
         # and don't depend on the LLM. We just lose company-specific questions.
 

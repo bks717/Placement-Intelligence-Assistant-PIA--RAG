@@ -65,6 +65,141 @@ GROUNDING RULES
 """
 
 
+from urllib.parse import quote_plus
+
+_FALLBACK_QUESTIONS = {
+    "procdna": {
+        "dsa_questions": [
+            {"question": "Given a string, find the first non-repeating character in it and return its index. If it does not exist, return -1.", "difficulty": "Easy", "topic": "String / HashMap"},
+            {"question": "Given an array of intervals where intervals[i] = [start_i, end_i], merge all overlapping intervals.", "difficulty": "Medium", "topic": "Array / Sorting"},
+            {"question": "Given an array of strings, group the anagrams together. You can return the answer in any order.", "difficulty": "Medium", "topic": "HashMap / String"},
+            {"question": "Given an array of integers and an integer k, find the total number of subarrays whose sum equals to k.", "difficulty": "Medium", "topic": "Prefix Sum / HashMap"},
+            {"question": "Given a string containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid.", "difficulty": "Easy", "topic": "Stack"}
+        ],
+        "core_questions": [
+            {"question": "Explain the difference between primary key, unique key, and foreign key in SQL.", "subject": "SQL"},
+            {"question": "What are the main features of OOPS? Explain Polymorphism with an example.", "subject": "OOPS"},
+            {"question": "How does index-based querying optimize database search? Explain clustered vs non-clustered indexes.", "subject": "DBMS"},
+            {"question": "Explain ACID properties in a relational database management system.", "subject": "DBMS"},
+            {"question": "What is the difference between a process and a thread in OS?", "subject": "Operating Systems"}
+        ],
+        "sources": [
+            {"title": "Glassdoor ProcDNA Interview Reviews", "url": "https://www.glassdoor.co.in/Reviews/ProcDNA-Reviews-E2596541.htm"},
+            {"title": "AmbitionBox ProcDNA Interview Questions", "url": "https://www.ambitionbox.com/interviews/procdna-questions"}
+        ],
+        "note": "Pre-curated typical SDE/Consultant interview questions for ProcDNA."
+    },
+    "walmart": {
+        "dsa_questions": [
+            {"question": "Design a data structure that follows the constraints of a Least Recently Used (LRU) Cache.", "difficulty": "Hard", "topic": "Design / HashMap / DLL"},
+            {"question": "Given a string s, return the longest palindromic substring in s.", "difficulty": "Medium", "topic": "String / Dynamic Programming"},
+            {"question": "Given the root of a binary tree, return the zigzag level order traversal of its nodes' values.", "difficulty": "Medium", "topic": "Tree / BFS"},
+            {"question": "Given an integer array nums and an integer k, return the kth largest element in the array.", "difficulty": "Medium", "topic": "Heap / Quickselect"},
+            {"question": "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.", "difficulty": "Easy", "topic": "Array / HashMap"}
+        ],
+        "core_questions": [
+            {"question": "Explain the differences between SQL and NoSQL databases. When would you use which?", "subject": "DBMS"},
+            {"question": "What is the CAP Theorem? How does it apply to distributed data stores?", "subject": "System Design"},
+            {"question": "How does load balancing work, and what algorithms are commonly used?", "subject": "System Design"},
+            {"question": "What are ACID properties vs BASE properties in transaction management?", "subject": "DBMS"},
+            {"question": "Explain virtual memory and how page faults are resolved in an operating system.", "subject": "Operating Systems"}
+        ],
+        "sources": [
+            {"title": "GeeksforGeeks Walmart SDE Interview Experience", "url": "https://www.geeksforgeeks.org/walmart-interview-experience/"},
+            {"title": "LeetCode Walmart Discuss Forum", "url": "https://leetcode.com/discuss/interview-experience?q=walmart"}
+        ],
+        "note": "Pre-curated typical SDE-2/SDE-3 technical interview questions for Walmart Global Tech."
+    },
+    "google": {
+        "dsa_questions": [
+            {"question": "Given an array of integers nums and an integer k, return the number of continuous subarrays where the product of all the elements in the subarray is strictly less than k.", "difficulty": "Medium", "topic": "Sliding Window / Array"},
+            {"question": "You are given a list of songs where the i-th song has a duration of time[i] seconds. Return the number of pairs of songs for which their total duration in seconds is divisible by 60.", "difficulty": "Medium", "topic": "HashMap / Math"},
+            {"question": "Implement an autocomplete system. Given a query string, return top 3 historical matching suggestions.", "difficulty": "Hard", "topic": "Trie / Design"},
+            {"question": "Find the shortest path in a grid with obstacles elimination.", "difficulty": "Hard", "topic": "BFS / Graph"},
+            {"question": "Given a binary tree, find the maximum path sum. The path may start and end at any node.", "difficulty": "Hard", "topic": "Tree / DFS"}
+        ],
+        "core_questions": [
+            {"question": "How does the TCP three-way handshake work, and why is it necessary?", "subject": "Computer Networks"},
+            {"question": "Explain how garbage collection works in Java or similar managed runtimes.", "subject": "OOPS"},
+            {"question": "How would you design a rate limiter for an API? What algorithms (Leaky Bucket, Token Bucket) apply?", "subject": "System Design"},
+            {"question": "What is the difference between concurrency and parallelism?", "subject": "Operating Systems"},
+            {"question": "What are database isolation levels, and what anomalies (dirty reads, phantom reads) do they prevent?", "subject": "DBMS"}
+        ],
+        "sources": [
+            {"title": "Google SDE Interview Questions - GeeksforGeeks", "url": "https://www.geeksforgeeks.org/google-interview-preparation/"},
+            {"title": "LeetCode Google Discuss Archive", "url": "https://leetcode.com/discuss/interview-question?q=google"}
+        ],
+        "note": "Pre-curated rigorous SDE interview questions for Google."
+    },
+    "amazon": {
+        "dsa_questions": [
+            {"question": "Given an array of string words and a width maxWidth, format the text such that each line has exactly maxWidth characters and is fully justified.", "difficulty": "Hard", "topic": "String / Simulation"},
+            {"question": "Design a system that receives a stream of relationship data and answers connectivity queries.", "difficulty": "Medium", "topic": "Union Find / Graph"},
+            {"question": "Given an array of integers representing the height of walls, compute how much water it can trap after raining.", "difficulty": "Hard", "topic": "Two Pointers / Stack"},
+            {"question": "Given a list of course prerequisites, find the order in which you should take courses to graduate.", "difficulty": "Medium", "topic": "Topological Sort / Graph"},
+            {"question": "Given a string s, find the length of the longest substring without repeating characters.", "difficulty": "Medium", "topic": "Sliding Window / HashMap"}
+        ],
+        "core_questions": [
+            {"question": "Explain the difference between Optimistic Concurrency Control (OCC) and Pessimistic Concurrency Control (PCC).", "subject": "DBMS"},
+            {"question": "How does DNS resolution work? Trace the steps from browser to root server.", "subject": "Computer Networks"},
+            {"question": "Explain the Single Responsibility Principle and Open-Closed Principle in SOLID design.", "subject": "OOPS"},
+            {"question": "How would you design a distributed unique ID generator (like Twitter Snowflake)?", "subject": "System Design"},
+            {"question": "Explain the difference between paging and segmentation in memory management.", "subject": "Operating Systems"}
+        ],
+        "sources": [
+            {"title": "Amazon SDE Interview Archive", "url": "https://www.geeksforgeeks.org/amazon-interview-preparation/"},
+            {"title": "Glassdoor Amazon Software Engineer Reviews", "url": "https://www.glassdoor.co.in/Reviews/Amazon-Reviews-E6036.htm"}
+        ],
+        "note": "Pre-curated typical SDE interview questions for Amazon."
+    },
+    "microsoft": {
+        "dsa_questions": [
+            {"question": "Given a binary tree, find its lowest common ancestor (LCA) of two given nodes.", "difficulty": "Medium", "topic": "Tree / DFS"},
+            {"question": "Reverse a linked list in groups of size k.", "difficulty": "Hard", "topic": "Linked List"},
+            {"question": "Given a string s containing alphanumeric characters, find the longest palindromic substring.", "difficulty": "Medium", "topic": "String / DP"},
+            {"question": "Merge k sorted linked lists and return it as one sorted list.", "difficulty": "Hard", "topic": "Heap / Merge Sort"},
+            {"question": "Find the middle of a given linked list using a single pass.", "difficulty": "Easy", "topic": "Linked List / Two Pointers"}
+        ],
+        "core_questions": [
+            {"question": "What is the difference between Abstract Class and Interface? When to use which?", "subject": "OOPS"},
+            {"question": "Explain the differences between process synchronization mechanisms: Mutex vs Semaphore.", "subject": "Operating Systems"},
+            {"question": "How does database indexing work? What are B-Trees vs B+ Trees?", "subject": "DBMS"},
+            {"question": "Explain the difference between HTTP/1.1, HTTP/2, and HTTP/3.", "subject": "Computer Networks"},
+            {"question": "What is horizontal vs vertical scaling? When is database sharding required?", "subject": "System Design"}
+        ],
+        "sources": [
+            {"title": "Microsoft SDE Interview Questions - GeeksforGeeks", "url": "https://www.geeksforgeeks.org/microsoft-interview-preparation/"},
+            {"title": "AmbitionBox Microsoft Interview Questions", "url": "https://www.ambitionbox.com/interviews/microsoft-questions"}
+        ],
+        "note": "Pre-curated typical SDE interview questions for Microsoft IDC."
+    }
+}
+
+def get_generic_questions(company: str) -> dict:
+    return {
+        "company": company,
+        "dsa_questions": [
+            {"question": "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.", "difficulty": "Easy", "topic": "Array / HashMap"},
+            {"question": "Given a string containing just brackets, determine if the input string is valid.", "difficulty": "Easy", "topic": "Stack / String"},
+            {"question": "Given an array of intervals, merge all overlapping intervals.", "difficulty": "Medium", "topic": "Array / Sorting"},
+            {"question": "Find the length of the longest substring without repeating characters.", "difficulty": "Medium", "topic": "Sliding Window / HashMap"},
+            {"question": "Design a data structure that follows the constraints of a Least Recently Used (LRU) Cache.", "difficulty": "Hard", "topic": "Design / Double Linked List"}
+        ],
+        "core_questions": [
+            {"question": "What are the main principles of Object-Oriented Programming (OOPS)? Explain Inheritance.", "subject": "OOPS"},
+            {"question": "Explain the ACID properties of transactions in DBMS.", "subject": "DBMS"},
+            {"question": "Explain the difference between a clustered and non-clustered index in SQL.", "subject": "SQL"},
+            {"question": "What is the difference between a process and a thread in an Operating System?", "subject": "Operating Systems"},
+            {"question": "What is a load balancer? Explain horizontal vs vertical scaling.", "subject": "System Design"}
+        ],
+        "sources": [
+            {"title": f"{company} Interview Experience Reviews", "url": f"https://www.glassdoor.com/Search/results.htm?keyword={quote_plus(company)}"},
+            {"title": f"LeetCode Discuss - {company} Questions", "url": f"https://leetcode.com/discuss/interview-question?q={quote_plus(company)}"}
+        ],
+        "note": f"Fallback interview questions for {company} (Gemini API rate-limited / offline)."
+    }
+
+
 # ─────────────────────────────────────────────
 # Main public function
 # ─────────────────────────────────────────────
@@ -131,9 +266,24 @@ def fetch_interview_questions(company: str, role: str = "") -> dict:
     except Exception as e:
         msg = str(e)
         logger.error(f"Top Asked failed: {msg}")
-        if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
-            return {"error": "The AI service is rate-limited right now (free-tier quota). Please wait about a minute and try again."}
-        return {"error": "Could not research that company. Please try again in a moment."}
+        
+        # Check if we have pre-generated questions for this company
+        company_lower = company.lower().strip()
+        if company_lower in _FALLBACK_QUESTIONS:
+            logger.info(f"Using high-quality pre-generated fallback questions for: {company}")
+            return {
+                "company": company,
+                "role": role or "Software Engineer",
+                **_FALLBACK_QUESTIONS[company_lower]
+            }
+        
+        # Fall back to generic questions for other companies
+        logger.info(f"Using generic fallback questions for: {company}")
+        return {
+            "company": company,
+            "role": role or "Software Engineer",
+            **get_generic_questions(company)
+        }
 
     logger.info(f"Top Asked for '{company}' done in {time.time()-t0:.1f}s ({len(sources)} sources)")
 

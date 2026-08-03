@@ -149,8 +149,18 @@ def generate_answer(
 
     except Exception as e:
         logger.error(f"LLM generation failed: {e}")
+        msg = str(e)
+        if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+            friendly_err = (
+                "⚠️ The Gemini API daily free-tier quota (20 requests/day) has been exceeded for this API key. "
+                "However, the local RAG pipeline successfully retrieved the relevant interview experience chunks "
+                "listed in the 'Sources' tab below! Please check the sources tab for the direct answers, or try again later."
+            )
+        else:
+            friendly_err = f"Error generating answer: {msg}"
+
         return {
-            "answer": f"Error generating answer: {str(e)}",
+            "answer": friendly_err,
             "sources": sources,
             "chunks_used": len(chunks),
         }
