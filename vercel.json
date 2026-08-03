@@ -11,11 +11,15 @@
   ],
   "routes": [
     {
+      "src": "/api/(.*)",
+      "dest": "https://placement-intelligence-assistant-pia-rag.onrender.com/api/$1"
+    },
+    {
       "handle": "filesystem"
     },
     {
       "src": "/(.*)",
-      "dest": "frontend/$1"
+      "dest": "/index.html"
     }
   ]
 }
