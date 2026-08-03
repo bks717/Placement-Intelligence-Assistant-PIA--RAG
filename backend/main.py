@@ -79,16 +79,17 @@ app = FastAPI(
     lifespan=lifespan if not os.environ.get("VERCEL") else None,
 )
 
-# CORS — allow frontend dev server and Vercel domains
+# CORS — allow frontend dev server, custom domain, and Vercel domains
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         settings.frontend_url,
+        "https://puddy.krupakara.space",
         "http://localhost:5173",
         "http://localhost:3000",
         "http://127.0.0.1:5173",
     ],
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=r"https://.*\.(vercel\.app|krupakara\.space)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
