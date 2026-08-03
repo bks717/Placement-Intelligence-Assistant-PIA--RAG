@@ -192,6 +192,40 @@ python -m backend.eval.run_eval --faithfulness
 
 ---
 
+## 🌐 Production Deployment (Render + Vercel)
+
+Puddy is designed to run in a **split-cloud deployment model** to optimize costs and performance:
+* **Frontend (React)** is deployed on **Vercel** as a high-performance static site.
+* **Backend (FastAPI)** is deployed on **Render** as a Python web service connected to your MongoDB Atlas cloud database.
+
+### 1. Backend Deployment on Render
+
+Puddy includes a pre-configured [render.yaml](file:///c:/Users/bhava/OneDrive/Desktop/RAG_PROJECT/render.yaml) Blueprint file to make Render setup a one-click process:
+
+1. Log into your [Render Dashboard](https://dashboard.render.com/).
+2. Click **New > Blueprint Route** (or **Web Service**).
+3. Connect your GitHub repository.
+4. Render will automatically detect `render.yaml` and prompt you for the required environment variables:
+   * `PYTHON_VERSION`: `3.12.0`
+   * `GOOGLE_API_KEY`: *Your Google Gemini API Key*
+   * `GROQ_API_KEY`: *Your Groq API Key*
+   * `USE_MONGODB`: `true` *(or false to use local JSON file storage)*
+   * `MONGODB_URI`: *Your MongoDB connection string*
+   * `MONGODB_DB_NAME`: `pia_db`
+5. Click **Deploy**. Render will install dependencies from `requirements.txt` and start the server.
+6. Once deployed, copy your **Web Service URL** (e.g., `https://pia-backend.onrender.com`).
+
+### 2. Frontend Deployment on Vercel
+
+1. Log into your [Vercel Dashboard](https://vercel.com).
+2. Import your GitHub repository.
+3. In the project **Settings > Environment Variables**, add:
+   * **Key**: `VITE_API_BASE_URL`
+   * **Value**: *[Your Render Web Service URL from Step 1]* (e.g., `https://pia-backend.onrender.com`)
+4. Click **Redeploy**. Vercel will build the React bundle and point it directly to your Render backend API.
+
+---
+
 ## 🔌 API Reference
 
 ### Retrieval & Generation
