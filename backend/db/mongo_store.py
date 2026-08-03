@@ -322,5 +322,28 @@ def get_structured_store():
     return JSONStore()
 
 
-# Singleton instance
-structured_store = get_structured_store()
+# Singleton instance — lazily initialized.
+#
+# We DON'T call get_structured_store() at import time: with USE_MONGODB=true it
+# opens a MongoClient and blocks on an 8s `ping` handshake. On serverless (Vercel)
+# that runs during every cold start and can hang the first request; even locally
+# it delays every process boot. The lazy proxy below defers store creation (and
+# any network I/O) until the first actual DB access, so importing this module is
+# instant.
+class _LazyStore:
+    """Transparent proxy that builds the real store on first attribute access."""
+
+    _store = None
+
+    def _resolve(self):
+        if _LazyStore._store is None:
+            _LazyStore._store = get_structured_store()
+        return _LazyStore._store
+
+    def __getattr__(self, name):
+        # Only called for names not found normally (i.e. store methods),
+        # so _store/_resolve never recurse here.
+        return getattr(self._resolve(), name)
+
+
+structured_store = _LazyStore()
