@@ -1,298 +1,214 @@
-# Fast Prep — Implementation Plan v2 (DRAFT)
+# 🏗️ PIA System Architecture & RAG Blueprint
 
-> This is a **plan document only** — nothing has been implemented yet.
-> v2 changes: aptitude removed · company interview questions promoted to an
-> always-on compartment · exact DSA problems + exact concepts + links specified.
-
----
-
-## 1. What it does
-
-A student sits down before a placement drive and asks: **"I have a company
-test/JD in front of me and N days left — what do I actually study?"**
-
-Fast Prep answers with a **day-by-day study plan** built from three inputs:
-
-| Input | Required? | What it tells us |
-|---|---|---|
-| **Company name** | At least one of the two | Past interview questions, round structure, what the company actually asks |
-| **JD PDF** | At least one of the two | The exact skills/role they're hiring for |
-| **Days left** | Always | How much we can realistically cover → plan density |
-
-Either company name **or** JD alone works; both is best.
+Welcome to the architectural documentation for **PIA (Placement Intelligence Assistant)**. This blueprint details the end-to-end design, data flow, and RAG pipelines for the three core capabilities of the platform:
+1. **Resume & JD Analyzer (ATS Gap Assessment)**
+2. **Fast Prep (Personalized Study Plan & Top Asked Questions)**
+3. **About the Company (Grounded Dossier)**
 
 ---
 
-## 2. What the plan covers
+## 🔍 Retrieval-Augmented Generation (RAG) Overview
 
-The output is four **compartments**, always in this order:
+### What is RAG?
+Retrieval-Augmented Generation (RAG) is a pattern that enhances Large Language Models (LLMs) by retrieving relevant facts from an external, verified knowledge base (corpus) and inserting them into the prompt context before generating a response. This prevents hallucinations, ensures domain-specific accuracy, and allows citing sources for every claim.
 
-### Compartment 1 — Most-asked interview questions (always present, separate)
-
-The "seniors / people who actually sat the interview" compartment. Drawn
-exclusively from `interview_experience` chunks of that company in the corpus
-(real students' interview write-ups), **frequency-ranked**:
-
-- Same question appearing across multiple experiences = higher rank ("asked in
-  4/6 interviews").
-- Near-duplicates ("difference between inner and left join" vs "INNER vs LEFT
-  JOIN") are merged and their counts summed.
-- Every question carries its **source citation** (file + page) so the student
-  can open the original interview write-up.
-- **Always present even if the user only uploaded a JD** — company is required,
-  so we can always query past experiences. If the company has zero corpus data,
-  we say so honestly and fall back to JD-driven questions (see §6, decision 4).
-
-```json
-"interview_questions": [
-  {
-    "question": "Explain the difference between INNER JOIN and LEFT JOIN with an example",
-    "asked_in": 4,            // appeared in 4 of the interviewed students' write-ups
-    "round": "Technical",
-    "source": { "file": "ProcDNA_IV_1.pdf", "page": 3 }
-  }
-]
-```
-
-### Compartment 2 — Core subjects (the "core subs"), exact concepts
-
-Role/company-aware, chosen from JD keywords **and** what the company's past
-questions hit. **Aptitude is removed** — no aptitude study material, no
-aptitude retrieval.
-
-Every concept below is a **must-know** and ships with **its own clickable
-reference link** — not one link per bucket, but one link per concept, so a
-student can tap "INNER vs LEFT JOIN" and land directly on that topic's
-reference (GeeksforGeeks article, official docs, or a well-known explainer).
-
-| Bucket | Exact concepts we name (each is a must-know, each carries its own link) |
-|---|---|
-| **OOPS** | Classes vs objects, inheritance, polymorphism (compile vs runtime), encapsulation, abstraction, interfaces vs abstract classes, method overloading vs overriding, constructors, garbage collection |
-| **DBMS** | SQL joins (INNER/LEFT/RIGHT/FULL), GROUP BY/HAVING, normalization 1NF–3NF, indexes (clustered vs non-clustered), transactions + ACID, primary vs foreign key, subqueries vs CTEs |
-| **OS** | Processes vs threads, deadlock (conditions + prevention), scheduling (FCFS/SJF/RR), paging vs segmentation, memory management, race conditions + locks |
-| **Networks** | TCP vs UDP, TCP 3-way handshake, HTTP vs HTTPS, DNS, OSI model, IP addressing/subnetting, cookies vs sessions |
-| **System design** | Always included now — companies ask it increasingly, even at fresher/entry level: scalability basics, load balancing, caching (Redis), SQL vs NoSQL + when to use each, database sharding/replication, CAP theorem, API design (REST), rate limiting, message queues, a simple "design URL shortener / design a chat app" walk-through. Depth scales with the role (fresher = concepts + one design; senior/full-stack = deeper trade-offs). |
-
-Rendered as: each concept is a chip/pill the student can click through to its
-reference. In the UI it reads like a checklist of **must-know** items — tick
-them off as you study.
-
-Selection rule: **DSA and System design are always included.** The other
-buckets (OOPS, DBMS, OS, Networks) appear only if the JD or the company's past
-questions reference them — we don't dump every bucket on everyone.
-
-### Compartment 3 — DSA: exact problems to do
-
-Not "practice DP" — **named problems**, one line each, with a practice link:
+### How RAG Works in PIA
+In PIA, RAG is implemented using a **Hybrid Retrieval** design that merges:
+1. **Dense Vector Retrieval (ChromaDB)**: Captures semantic and contextual similarity.
+2. **Sparse Keyword Retrieval (BM25)**: Captures exact keyword matches (e.g., specific SQL operators, programming terms).
+3. **Cross-Encoder Re-ranking**: Joint query-document validation to score and surface the top-5 most relevant chunks.
 
 ```
-Day 2 — Arrays:
-  • Two Sum            → LeetCode 1          (link)
-  • Best Time to Buy & Sell Stock → LeetCode 121 (link)
-  • Sliding Window Maximum → LeetCode 239    (link)
-Day 4 — DP:
-  • Climbing Stairs    → LeetCode 70         (link)
-  • Longest Common Subsequence → LeetCode 1143 (link)
+       [ User Query ]
+             │
+      ┌──────┴──────┐
+      ▼             ▼
+ [ChromaDB]      [BM25]
+ (Dense SDE)   (Exact Match)
+      │             │
+      └──────┬──────┘
+             ▼
+      [ RRF Fusion ]
+             │
+             ▼
+    [ Cross-Encoder ]
+       Re-ranking
+             │
+             ▼
+    [ Context Prompt ]
+             │
+             ▼
+        [ Gemini ] ──► [ Cited Response ]
 ```
 
-| Track | Patterns included (each maps to 3–5 named problems) |
-|---|---|
-| Arrays & Strings | Two-pointer, sliding window, prefix sum, hashing |
-| Linked Lists / Stacks / Queues | Reversal, cycle detection, monotonic stack, BFS/DFS |
-| Trees & Graphs | Traversals, BST, recursion, shortest path, topological sort |
-| DP | 1D/2D DP, knapsack-family, LCS/LIS, memoization |
-| Searching & Sorting | Binary search variants, sort + two-pointer |
-
-Depth scales with days-left: 3 days → only the highest-yield patterns (arrays,
-two-pointer, 1D DP); 30 days → the full track, one pattern per day.
-
-### Compartment 4 — Day-by-day schedule
-
-The LLM distributes Compartments 1–3 across `days_left`, front-loading the
-most-asked questions and high-priority concepts, and reserving the **last 1–2
-days for mock/revision** of the top interview questions.
-
 ---
 
-## 2b. How the plan is presented — two tabs
+## 📄 1. Resume & JD Analyzer (ATS Gap Assessment)
 
-Once the plan is generated, the Fast Prep page shows **two tabs**:
+### What it is
+The **Resume & JD Analyzer** is an ATS-style tool that analyzes a student's resume PDF against a target Job Description (JD) PDF in-memory. It provides a match score, flags missing keywords, lists missing/preferred skills, and recommends actions to improve alignment.
 
-| Tab | Content |
-|---|---|
-| **📋 Study Plan** | The day-by-day schedule (Compartment 4) with the core concepts + DSA problems for each day, each with its links. "Here's what to do today." |
-| **🔥 Top Questions** | The most-asked / top-occurring company interview questions (Compartment 1), frequency-ranked with their sources. "Here's what seniors actually got asked." |
+### How it Works (Conceptually)
+It performs a structural comparison between two unstructured texts:
+1. **Resume extraction**: Analyzes sections (Work Experience, Skills, Education) and checks formatting constraints.
+2. **JD extraction**: Identifies key criteria (Role, Seniority, Required Skills, Domain).
+3. **Gap Analysis**: Cross-references the resume's skills/projects against the JD requirements to score compatibility.
 
-Tab name options for the second one (pick one, or we settle at build time):
-- **"Top Asked"** — short, clear
-- **"Most Asked"** — direct
-- **"Hot Questions"** — casual
-- **"Recent Interviews"** — emphasizes freshness
-- **"Asked Before"** — plain
+### How it Works in the Project
+1. **In-Memory Parsing**: The frontend sends the PDF bytes of both documents via a multipart request. `pdf_loader` extracts the raw text.
+2. **Formatting Audit (Local)**: Zero-cost Python regular expressions run first to inspect formatting rules (e.g., presence of email, phone number, section count).
+3. **LLM Extraction**: The backend sends both texts to Gemini with a highly constrained Pydantic validation schema (`ResumeAnalyzeResponse`), returning structured JSON.
 
-The DSA problems and core concepts live **inside each day of the Study Plan
-tab** (with their links), so the schedule is the single scrollable "what to
-do" view, and Top Questions is the always-visible "what to expect" view.
-Compartment 1's questions also re-appear in the schedule days where they're
-assigned for mock/revision, cross-linked back to the Top Questions tab.
+### Step-by-Step Workflow Example
+A student uploads `My_Resume.pdf` and `Walmart_SDE2_JD.pdf`:
 
----
+1. **Input text extracted**:
+   * **Resume text**: *"Bhavasmit | SDE. Skills: Java, Python, React, MySQL. Experience: Built e-commerce backend..."*
+   * **JD text**: *"Walmart seeking SDE-2. Required: Java, Spring Boot, Redis, NoSQL, Kafka, 3+ years experience..."*
 
-## 3. Links — where they come from (your question)
+2. **Regex Formatting Checks (Local)**:
+   * Confirms email and phone numbers are present.
+   * Scans for missing sections (e.g., "Projects" is present, but "Certifications" is absent).
 
-Three kinds of links, clearly labelled in the UI:
+3. **Gemini Gap Assessment**:
+   * Evaluates requirements against experience.
+   * **Matched Skills**: `Java`, `React`, `MySQL`
+   * **Missing Required Skills**: `Spring Boot`, `Redis`, `NoSQL`, `Kafka`
 
-| Kind | What it points to | Source |
-|---|---|---|
-| **Source citation** | The original interview write-up or JD chunk (file + page) behind every company interview question and every "why this concept" claim | Corpus — always available, opens the actual PDF page |
-| **Practice links** | Every named DSA problem → its LeetCode / GeeksforGeeks problem page | Generated (curated problem → URL mapping) |
-| **Concept links** | **Every** core concept (a must-know) → its own reference (GfG article, official docs, well-known explainer). One link per concept, not per bucket. | Generated (concept → best reference URL) |
-
-So: every interview question is **backed by a clickable source**, every DSA
-problem is **a clickable problem**, every concept is **a clickable reference**.
-(Optional future: live web links via Google grounding, same as About Company —
-see §6 decision 5.)
-
----
-
-## 4. Inputs → plan generation (end-to-end flow)
-
-```
-        ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-        │ Company name│   │  JD PDF     │   │  Days left  │
-        └──────┬──────┘   └──────┬──────┘   └──────┬──────┘
-               │                 │                 │
-               ▼                 ▼                 ▼
-   ┌────────────────────┐  ┌──────────────┐  ┌──────────────┐
-   │ 1. Company lookup  │  │ 2. JD parse  │  │ 3. Days clamp│
-   │   /companies/{name}│  │  (same as    │  │  1-90, tune  │
-   │  → rounds, skills  │  │  resume/jd)  │  │  density     │
-   └─────────┬──────────┘  └──────┬───────┘  └──────┬───────┘
-             └────────────────────┼──────────────────┘
-                                  ▼
-              ┌──────────────────────────────────────────┐
-              │ 4. RAG retrieval (existing retriever)    │
-              │   - doc_type="interview_experience" +    │
-              │     company=<name> → past questions      │
-              │     (frequency-counted, deduped)         │
-              │   - doc_type="job_description" → skills  │
-              └──────────────────┬───────────────────────┘
-                                 ▼
-              ┌──────────────────────────────────────────┐
-              │ 5. Gemini plan builder (one call)        │
-              │   Inputs: interview questions + JD       │
-              │   skills + days_left                     │
-              │   Output: structured JSON (4 compartments)│
-              └──────────────────┬───────────────────────┘
-                                 ▼
-              ┌──────────────────────────────────────────┐
-              │ 6. Response: interview questions + core  │
-              │    concepts + DSA problems + schedule    │
-              └──────────────────────────────────────────┘
-```
-
-Aptitude is fully out: no `aptitude_material` query, no aptitude bucket, no
-aptitude schedule entries. If past interviews mention an aptitude round, it
-only appears as a **heads-up line** in round structure ("Round 1: Aptitude —
-expect speed-based questions"), never as study material.
-
----
-
-## 5. API design
-
-### `POST /api/fast-prep/plan`
+4. **Structured JSON Output**:
 ```json
 {
-  "company": "ProcDNA",          // optional, but at least one of company/JD
-  "jd_file": "<multipart PDF>",  // optional
-  "days_left": 14                // required, 1-90
+  "ats_score": 68.0,
+  "company": "Walmart",
+  "role": "Software Engineer II",
+  "matched_required_skills": ["Java", "React", "MySQL"],
+  "missing_required_skills": ["Spring Boot", "Redis", "NoSQL", "Kafka"],
+  "formatting_issues": ["Missing LinkedIn profile", "No mention of cloud services"],
+  "priority_recommendations": [
+    "Add Spring Boot and Redis experience to your technical skills section.",
+    "Describe your e-commerce project backend scaling achievements using system metrics."
+  ],
+  "overall_verdict": "Good technical foundation, but lacks matching backend framework exposure required for SDE-2."
 }
 ```
 
-### Response (drives the two tabs)
+---
 
-`interview_questions` feeds the **Top Questions** tab; `schedule` (with its
-embedded concepts + DSA) feeds the **Study Plan** tab.
+## 📅 2. Fast Prep (Day-by-Day Study Plan)
 
+### What it is
+**Fast Prep** is a structured timeline generator for SDE placement prep. If a drive is in $N$ days, it builds a day-by-day study roadmap mapping out exact **concept reference links**, **DSA practice problems**, and **most-asked company interview questions**.
+
+### How it Works (Conceptually)
+It distributes a curated curriculum across a dynamic time limit, prioritizing high-yield topics (like Arrays/Strings and basic SQL) for short timelines (e.g., 3 days) and expanding to advanced topics (like System Design and DP) for longer timelines (e.g., 30 days).
+
+### How it Works in the Project
+1. **Local RAG Retrieval**: When a student enters a company name, the pipeline queries the local `pia_chunks` database for all `doc_type="interview_experience"` and `company=company` records.
+2. **Frequency Ranking**: Chunks are processed in Python using string similarity to identify and count overlapping question patterns (e.g., merging near-duplicates).
+3. **Curated Banks Integration**: Rather than letting the LLM invent study materials, the system merges the retrieved questions with pre-vetted curriculum databases:
+   * **Core subject bank**: Verified articles (OOPS, OS, Networks, DBMS, System Design).
+   * **DSA bank**: Curated LeetCode problems (names, difficulty, and links).
+4. **Deterministic Allocation**: A Python scheduling algorithm distributes the workload evenly across the days, reserving the final 1–2 days for mock practice of the top-ranked interview questions.
+
+### Step-by-Step Workflow Example
+A student requests a **5-day plan** for **ProcDNA**:
+
+1. **Local RAG Lookup**:
+   * Retrieves 15 write-up files for ProcDNA.
+   * Identifies that 4 students were asked about *"SQL Joins vs Subqueries"* and 3 were asked to *"Merge Intervals"*.
+
+2. **Workload Selection (5 Days)**:
+   * Since timeline is short ($5$ days), the scheduler pulls **Easy-Medium** difficulty items.
+   * Selects OOPS & SQL/DBMS buckets; skips low-priority OS/Networks buckets.
+   * Selects top 5 DSA problems from the curated repository.
+
+3. **Day-by-Day Scheduling**:
+   * **Day 1**: SQL Joins & Two Sum.
+   * **Day 2**: SQL Indexes & Group Anagrams.
+   * **Day 3**: Polymorphism & Merge Intervals.
+   * **Day 4**: System Design basics & mock interview prep.
+   * **Day 5**: Solve top-asked ProcDNA questions (revising questions retrieved in Step 1).
+
+4. **Structured JSON Output**:
 ```json
 {
   "company": "ProcDNA",
-  "role": "Data Analyst",
-  "days_left": 14,
-  "density": "moderate",
-
-  // ── Top Questions tab ──
+  "days_left": 5,
   "interview_questions": [
-    { "question": "SQL JOIN question from 4 interviews...",
-      "asked_in": 4, "round": "Technical",
-      "source": { "file": "ProcDNA_IV_1.pdf", "page": 3 } }
-  ],
-
-  // ── Study Plan tab: concepts + DSA embedded per day ──
-  "core_concepts": [
-    { "bucket": "DBMS", "priority": "high",
-      "concepts": [
-        { "name": "INNER vs LEFT JOIN", "link": "https://...gfg..." },
-        { "name": "normalization 1NF-3NF", "link": "https://...gfg..." }
-      ],
-      "why": "JD lists SQL + 4 past questions mention joins" },
-    { "bucket": "System design", "priority": "high",
-      "concepts": [
-        { "name": "load balancing", "link": "https://..." },
-        { "name": "design URL shortener", "link": "https://..." }
-      ],
-      "why": "asked increasingly even at entry level" }
-  ],
-  "dsa": [
-    { "day": 2, "pattern": "Arrays — two-pointer",
-      "problems": [ { "name": "Two Sum", "platform": "LeetCode",
-                      "id": 1, "link": "https://leetcode.com/problems/two-sum/" } ] }
+    {
+      "question": "Explain the difference between INNER JOIN and LEFT JOIN with an example",
+      "asked_in": 4,
+      "round": "Technical",
+      "source": { "file": "ProcDNA_IE_1.pdf", "page": 3 }
+    }
   ],
   "schedule": [
-    { "day": 1, "focus": "Most-asked SQL + Arrays",
-      "concepts": ["INNER vs LEFT JOIN"], "dsa": ["Two Sum"],
-      "revise_questions": ["ProcDNA SQL JOIN question"] }
+    {
+      "day": 1,
+      "focus": "SQL Joins & Arrays",
+      "concepts": ["SQL Joins (INNER/LEFT/RIGHT)"],
+      "dsa": ["Two Sum"],
+      "revise_questions": []
+    }
   ]
 }
 ```
 
 ---
 
-## 6. Files touched (when we build)
+## 🏢 3. About the Company (Grounded Dossier)
 
-| Layer | File | Change |
-|---|---|---|
-| Backend module | `backend/rag/fast_prep.py` (new) | JD parse + retrieval + question frequency-count + Gemini JSON |
-| Schema | `backend/api/schemas.py` | `FastPrepRequest`, `FastPrepResponse`, sub-models per compartment |
-| Route | `backend/api/routes.py` | `POST /api/fast-prep/plan` |
-| Frontend | `frontend/src/pages/FastPrepPage.jsx` | form (company + JD upload + days slider) → two-tab render (Study Plan / Top Questions) |
-| Services | `frontend/src/services/api.js` | `getFastPrepPlan()` |
-| Styles | `frontend/src/index.css` | plan/schedule styling |
+### What it is
+**About the Company** is a grounded intelligence report outlining a company's market overview, hiring standards, pros/cons, work-life balance, and typical SDE salaries. Every claim is backed by real, clickable web citations.
 
-### Reused pieces (no new work)
-- PDF text extraction — copy fitz `_extract_text` from `backend/resume/analyzer.py`
-- JD skills/role extraction — same Gemini JSON approach as the resume analyzer
-- Hybrid retrieval — `backend/rag/retriever.py` with company + doc_type filters
-- Frequency-counting/dedup of interview questions — done in Python over
-  retrieved chunks (no LLM needed for the count, LLM only for final shaping)
+### How it Works (Conceptually)
+Traditional LLMs cannot provide up-to-date details on salaries or employee reviews because their training data is static. Grounded RAG solves this by executing real-time web searches (careers pages, Glassdoor, news, annual reports) and using the search results as context to write the report.
+
+### How it Works in the Project
+1. **Live Search Integration**: The backend issues a grounded request to Gemini with Google Search enabled as a tool.
+2. **Citations Extraction**: The backend parses the Gemini response metadata to extract the exact web page titles and URLs Google Search crawled.
+3. **Robust Fallback Engine**: If the daily free-tier Gemini API limit is exhausted (generating a 429 error), the engine catches the exception and falls back to:
+   * **Pre-generated popular dossiers** for target companies (Google, Microsoft, Amazon, Walmart, ProcDNA) to ensure zero downtime.
+   * **Dynamic templates** for any other requested company names.
+
+### Step-by-Step Workflow Example
+A user searches for **Walmart**:
+
+1. **Live Request to Gemini**:
+   * System triggers Gemini with search tool enabled: *"Provide a dossier on Walmart Global Tech India salaries, pros, cons, and presence."*
+   * Gemini searches Google for: `Walmart Global Tech India careers`, `Walmart salaries Glassdoor site:levels.fyi`, `Walmart India news`.
+
+2. **Compilation**:
+   * Gemini compiles the report.
+   * Extracts links to the articles it referenced.
+
+3. **Response Assembly**:
+   * Merges overview, presence, pros/cons list, work-life rating, and salary ranges.
+   * Attaches the source URLs so the student can verify the details.
+
+4. **Structured JSON Output**:
+```json
+{
+  "company": "Walmart",
+  "overview": "Walmart Global Tech India builds core supply-chain and e-commerce platforms powering global retail.",
+  "india_presence": "Massive offices in Bengaluru and Chennai.",
+  "pros": ["Highly competitive compensation", "Tremendous engineering scale"],
+  "cons": ["Bureaucracy can slow project approvals"],
+  "salaries": ["Software Engineer (SDE-2): ₹18L - ₹24L per annum base"],
+  "work_life_balance": "Excellent work-life balance with standard hybrid flexibility.",
+  "sources": [
+    { "title": "Walmart Careers Tech India", "url": "https://careers.walmart.com/global-tech-india" },
+    { "title": "Glassdoor Reviews", "url": "https://www.glassdoor.com/Reviews/Walmart-Reviews-E6036.htm" }
+  ]
+}
+```
 
 ---
 
-## 7. Decisions to confirm
+## 🛠️ Summary Matrix: RAG Usage Across Features
 
-1. **JD optional?** Plan says "at least one of company/JD". Pure-company plans
-   work but are generic-er. Confirm.
-2. **Density tiers** — 14 days: `packed` (6+ hrs/day), `moderate` (3-4),
-   `relaxed` (1-2). Confirm.
-3. **Question frequency cap** — Compartment 1 shows the top ~15 questions
-   ranked by `asked_in`? Or all of them? (Plan: top 15, "see all" toggle.)
-4. **No corpus data for a company** → graceful fallback: JD-only plan + a
-   clear "no past interview write-ups ingested for X yet" note? Or auto-add a
-   web-grounded "recent hiring pattern" section like About Company?
-5. **Web grounding at all?** Keep Fast Prep 100% corpus-based (fast, free,
-   offline) or optionally pull live links (slower, needs quota) — same tradeoff
-   as About Company.
-6. **No scores/ratings on the company** — the plan recommends *what to study*,
-   never rates the company. (Confirmed behavior, carried over.)
-7. **Day numbering** — "14 days left" → Day 1 today, Day 14 = light
-   revision/mock. Confirm.
+| Feature | Where RAG is Used | Search Engine | Data Source | Citations Provided? |
+|---|---|---|---|---|
+| **Resume & JD Analyzer** | No RAG (Context-in-prompt) | None | Uploaded PDF bytes (In-Memory) | No |
+| **Fast Prep** | Local RAG | ChromaDB + BM25 | Local `interview_experience` PDFs | Yes (File + Page number) |
+| **About the Company** | Grounded Web RAG | Google Search | Live Web Index | Yes (Source Titles + URLs) |
