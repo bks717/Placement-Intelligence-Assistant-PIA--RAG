@@ -606,7 +606,22 @@ def generate_fast_prep_plan(
             if content.startswith("```"):
                 content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
 
-            data = json.loads(content)
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError as e:
+                logger.warning(f"Fast Prep primary JSON parse failed: {e}. Attempting manual Gemini fallback...")
+                from backend.rag.llm_client import _gemini_model
+                gemini = _gemini_model(temperature=0.1)
+                resp = gemini.invoke(prompt)
+                raw = resp.content
+                if isinstance(raw, list):
+                    raw = "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in raw)
+                content = (raw or "").strip()
+                if content.startswith("```"):
+                    content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+                data = json.loads(content)
+                logger.info("Fast Prep manual Gemini fallback successfully parsed JSON.")
+
             if data.get("error") and not jd_final and not has_corpus_questions:
                 return {"error": data["error"]}
 

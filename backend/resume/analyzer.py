@@ -198,32 +198,45 @@ def analyze_resume(resume_pdf_bytes: bytes, jd_pdf_bytes: bytes) -> dict:
             fmt_score=int(fmt["score"]),
         )
 
+        from backend.rag.llm_client import _gemini_model, _groq_model
+
         t1 = time.time()
-        logger.info("Sending ATS prompt (Groq primary → Gemini lite fallback)...")
-        # temp 0.0 = deterministic, fast; mechanical JSON extraction task.
-        response = chat_invoke(prompt, temperature=0.0)
-        logger.info(f"LLM responded in {time.time()-t1:.1f}s")
+        logger.info("Sending ATS prompt to Gemini (primary)...")
+        try:
+            gemini = _gemini_model(temperature=0.0)
+            response = gemini.invoke(prompt)
+            raw = response.content
+            if isinstance(raw, list):
+                raw = "".join(
+                    part.get("text", "") if isinstance(part, dict) else str(part)
+                    for part in raw
+                )
+            content = (raw or "").strip()
+            if content.startswith("```"):
+                content = content.split("\n", 1)[1]
+                content = content.rsplit("```", 1)[0].strip()
+            report = json.loads(content)
+            logger.info(f"Gemini responded and parsed successfully in {time.time()-t1:.1f}s")
+        except Exception as gemini_err:
+            logger.warning(f"Gemini primary failed or returned malformed JSON: {gemini_err}. Attempting Groq fallback...")
+            t2 = time.time()
+            groq = _groq_model(temperature=0.0)
+            if groq is None:
+                raise gemini_err
+            response = groq.invoke(prompt)
+            raw = response.content
+            if isinstance(raw, list):
+                raw = "".join(
+                    part.get("text", "") if isinstance(part, dict) else str(part)
+                    for part in raw
+                )
+            content = (raw or "").strip()
+            if content.startswith("```"):
+                content = content.split("\n", 1)[1]
+                content = content.rsplit("```", 1)[0].strip()
+            report = json.loads(content)
+            logger.info(f"Groq fallback responded and parsed successfully in {time.time()-t2:.1f}s")
 
-        # response.content may be a plain string OR a list of content blocks
-        # (thinking-model shape: [{"type": "text", "text": "..."}]). Normalize.
-        raw = response.content
-        if isinstance(raw, list):
-            raw = "".join(
-                part.get("text", "") if isinstance(part, dict) else str(part)
-                for part in raw
-            )
-        content = (raw or "").strip()
-
-        # Strip markdown fences if Gemini adds them despite instructions
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1]
-            content = content.rsplit("```", 1)[0].strip()
-
-        report = json.loads(content)
-
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON parse failed: {e}\nRaw: {content[:300]}")
-        return {"error": "ATS analysis returned malformed data. Please try again."}
     except Exception as e:
         msg = str(e)
         logger.error(f"ATS analysis failed: {msg}")

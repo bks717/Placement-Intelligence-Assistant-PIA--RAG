@@ -44,6 +44,7 @@ def _groq_model(structured_schema: Optional[type] = None, temperature: float = 0
     llm = ChatGroq(
         model=settings.groq_model,
         temperature=temperature,
+        max_tokens=4096,
         max_retries=0,
     )
     if structured_schema is not None:
@@ -59,6 +60,7 @@ def _gemini_model(structured_schema: Optional[type] = None, temperature: float =
     llm = ChatGoogleGenerativeAI(
         model=settings.llm_extraction_model,  # lite — 500 RPD, fast
         temperature=temperature,
+        max_output_tokens=4096,
         max_retries=0,
         timeout=45,
     )
